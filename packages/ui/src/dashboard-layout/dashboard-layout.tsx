@@ -1,7 +1,7 @@
 import { HTMLAttributes } from 'react';
 import { cn } from '../../lib/utils';
 
-interface DashboardLayoutProps extends HTMLAttributes<HTMLDivElement> {}
+export interface DashboardLayoutProps extends HTMLAttributes<HTMLDivElement> {}
 
 export const DashboardLayout = ({ className, children, ...props }: DashboardLayoutProps) => {
   return (

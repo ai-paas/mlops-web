@@ -2,7 +2,7 @@ import { ComponentPropsWithoutRef, forwardRef, type ComponentProps } from 'react
 import { cn } from '../../lib/utils';
 import Link from 'next/link';
 
-interface SidebarProps extends ComponentPropsWithoutRef<'aside'> {}
+export interface SidebarProps extends ComponentPropsWithoutRef<'aside'> {}
 
 const Sidebar = forwardRef<HTMLElement, SidebarProps>(({ className, ...props }, forwardedRef) => {
   return (
