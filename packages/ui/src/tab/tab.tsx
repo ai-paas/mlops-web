@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, ReactNode, useContext, useState } from 'react';
+import { createContext, HTMLAttributes, ReactNode, useContext, useState } from 'react';
+import { cn } from '../../lib/utils';
 
 /* -------------------------------------------------------------------------------------------------
  * TabsContext
@@ -31,20 +32,28 @@ const useTabsContext = () => {
  * Tabs
  * -----------------------------------------------------------------------------------------------*/
 
-const Tabs: React.FC<{ children: ReactNode }> = ({ children }) => {
-  return <TabsProvider>{children}</TabsProvider>;
+interface TabsProps {
+  children: React.ReactNode;
+}
+
+const Tabs = ({ children }: TabsProps) => {
+  return (
+    <TabsProvider>
+      <div>{children}</div>
+    </TabsProvider>
+  );
 };
 
-const TabList: React.FC<{ children: ReactNode }> = ({ children }) => {
+const TabList = ({ children }: { children: ReactNode }) => {
   return <div role="tablist">{children}</div>;
 };
 
-interface TabProps {
+interface TabProps extends HTMLAttributes<HTMLButtonElement> {
   tabId: string;
   children: React.ReactNode;
 }
 
-const Tab: React.FC<TabProps> = ({ tabId, children }) => {
+const Tab = ({ tabId, children, className, ...props }: TabProps) => {
   const { activeTab, setActiveTab } = useTabsContext();
   const isActive = activeTab === tabId;
 
@@ -53,26 +62,30 @@ const Tab: React.FC<TabProps> = ({ tabId, children }) => {
       role="tab"
       aria-selected={isActive}
       onClick={() => setActiveTab(tabId)}
-      className={`${isActive ? 'bg-blue-500 text-white' : 'tex-black bg-white'} mx-1 rounded-md px-4 py-2`}
+      className={cn(
+        `mx-1 rounded-md px-4 py-2 transition-colors`,
+        isActive ? `text-white ${className || 'bg-blue-500'}` : 'bg-white text-black'
+      )}
+      {...props}
     >
       {children}
     </button>
   );
 };
 
-interface TanPanelProps {
+interface TabPanelProps {
   tabId: string;
   children: React.ReactNode;
 }
 
-const TabPanel: React.FC<TanPanelProps> = ({ tabId, children }) => {
+const TabPanel = ({ tabId, children }: TabPanelProps) => {
   const { activeTab } = useTabsContext();
 
   if (activeTab !== tabId) {
     return null;
   }
 
-  return <div role="tabpenel">{children}</div>;
+  return <div role="tabpanel">{children}</div>;
 };
 
 export { Tabs, TabList, Tab, TabPanel };
