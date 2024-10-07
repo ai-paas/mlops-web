@@ -3,8 +3,10 @@
   "private": true,
   "scripts": {
     "build": "turbo build",
+    "build:storybook": "turbo build:storybook build --filter storybook",
     "dev": "turbo dev",
-    "dev:web": "turbo run dev --filter ui --filter web",
+    "dev:dashboard": "turbo run dev --filter total-dashboard",
+    "dev:storybook": "turbo run dev --filter storybook",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "prepare": "husky",
