@@ -4,86 +4,54 @@ import {
   useGetModelProviders,
   useGetModelTypes,
 } from '@/hooks/service/models';
-import type { HubModel, ModelFormat, ModelProvider, ModelType } from '@/types/model';
-import { BreadCrumb, Button, FileDrop, Input, Select, Textarea } from '@innogrid/ui';
-import { useEffect, useState } from 'react';
+import type { HubModel } from '@/types/model';
+import { BreadCrumb, Button, FileDrop, Input, Textarea, useToast } from '@innogrid/ui';
+import { useEffect } from 'react';
+import { Controller, useWatch } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router';
-
-interface CustomModel {
-  name: string | null;
-  repo_id: string | null;
-  provider_id: number | null;
-  type_id: number | null;
-  format_id: number | null;
-  description?: string;
-  parent_model_id?: number;
-  task?: string;
-  parameter?: string;
-  sample_code?: string;
-  model_registry_schema?: string;
-  file?: File;
-}
-
-const INITIAL_CUSTOM_MODEL = {
-  name: null,
-  repo_id: null,
-  provider_id: null,
-  type_id: null,
-  format_id: null,
-};
+import { getServerErrorMessage } from '@/lib/api';
+import {
+  buildModelCreateFormData,
+  useModelCreateForm,
+  type ModelCreateFormOutput,
+} from '@/components/features/model/model-create-form';
+import { ModelOptionSelect } from '@/components/features/model/model-option-select';
 
 export default function CustomModelCreatePage() {
   const location = useLocation();
-  const selectedModel = location.state?.selectedModel as HubModel;
+  const selectedModel = location.state?.selectedModel as HubModel | undefined;
   const market = location.state?.market as 'huggingface' | 'kaggle' | undefined;
   const { modelProviders } = useGetModelProviders();
   const { modelTypes } = useGetModelTypes();
   const { modelFormats } = useGetModelFormats();
-  const [customModel, setCustomModel] = useState<CustomModel>(INITIAL_CUSTOM_MODEL);
   const navigate = useNavigate();
+  const toast = useToast();
   const { createModel, isPending } = useCreateModel();
+  const {
+    register,
+    control,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useModelCreateForm();
+  const file = useWatch({ control, name: 'file' });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setCustomModel({
-      ...customModel,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  const handleAddFile = (files: File[]) => {
-    const file = files[0];
-    if (!file) return;
-    setCustomModel((prev) => ({ ...prev, file }));
-  };
-
-  const handleDeleteFile = () => {
-    setCustomModel((prev) => ({ ...prev, file: undefined }));
-  };
-
-  const handleSubmit = async () => {
-    if (
-      !customModel.name ||
-      !customModel.repo_id ||
-      !customModel.provider_id ||
-      !customModel.type_id ||
-      !customModel.format_id
-    ) {
-      alert('필수 항목을 모두 입력해주세요.');
-      return;
+  const onValid = async (values: ModelCreateFormOutput) => {
+    try {
+      await createModel(buildModelCreateFormData(values));
+      toast.open({
+        status: 'positive',
+        title: '커스텀 모델 생성 성공',
+        children: '커스텀 모델이 성공적으로 생성되었습니다.',
+      });
+      navigate('/model/custom-model');
+    } catch (error) {
+      toast.open({
+        status: 'negative',
+        title: '커스텀 모델 생성 실패',
+        children: getServerErrorMessage(error, '커스텀 모델 생성 중 오류가 발생했습니다.'),
+      });
     }
-
-    const formData = new FormData();
-    formData.append('name', customModel.name);
-    formData.append('repo_id', customModel.repo_id);
-    formData.append('provider_id', String(customModel.provider_id));
-    formData.append('type_id', String(customModel.type_id));
-    formData.append('format_id', String(customModel.format_id));
-    formData.append('description', customModel.description ?? '');
-    formData.append('sample_code', customModel.sample_code ?? '');
-    if (customModel.file) formData.append('file', customModel.file);
-
-    await createModel(formData);
-    navigate('/model/custom-model');
   };
 
   useEffect(() => {
@@ -93,12 +61,9 @@ export default function CustomModelCreatePage() {
     const matchedProvider = market
       ? modelProviders.find((provider) => normalize(provider.name).includes(normalize(market)))
       : undefined;
-    setCustomModel((prev) => ({
-      ...prev,
-      repo_id: selectedModel.id,
-      provider_id: matchedProvider?.id ?? prev.provider_id,
-    }));
-  }, [location, market, modelProviders, selectedModel]);
+    setValue('repo_id', selectedModel.id);
+    if (matchedProvider) setValue('provider_id', matchedProvider.id);
+  }, [market, modelProviders, selectedModel, setValue]);
 
   return (
     <main>
@@ -122,9 +87,8 @@ export default function CustomModelCreatePage() {
             <div className="page-input_item-data">
               <Input
                 placeholder="모델명을 입력해주세요."
-                name="name"
-                value={customModel.name ?? ''}
-                onChange={handleChange}
+                errMessage={errors.name?.message}
+                {...register('name')}
               />
               <p className="page-input_item-input-desc">
                 화면에 표시될 커스텀 모델의 이름을 입력해주세요.
@@ -134,12 +98,22 @@ export default function CustomModelCreatePage() {
           <div className="page-input_item-box">
             <div className="page-input_item-name page-icon-requisite">모델 ID</div>
             <div className="page-input_item-data">
-              <Input
+              {/* 허브에서 넘어온 모델은 ID를 잠근다 — disabled 필드는 register 값에서 빠지므로 Controller로 값을 유지한다 */}
+              <Controller
                 name="repo_id"
-                placeholder="모델 ID를 입력해주세요."
-                disabled={!!selectedModel}
-                value={customModel.repo_id ?? ''}
-                onChange={handleChange}
+                control={control}
+                render={({ field, fieldState }) => (
+                  <Input
+                    ref={field.ref}
+                    name={field.name}
+                    placeholder="모델 ID를 입력해주세요."
+                    disabled={!!selectedModel}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    errMessage={fieldState.error?.message}
+                  />
+                )}
               />
               <p className="page-input_item-input-desc">
                 모델 저장소(Repository)의 고유 ID를 입력해주세요.
@@ -149,20 +123,19 @@ export default function CustomModelCreatePage() {
           <div className="page-input_item-box">
             <div className="page-input_item-name page-icon-requisite">모델 공급자 ID</div>
             <div className="page-input_item-data">
-              <Select
-                isDisabled={!!selectedModel}
-                options={modelProviders}
-                getOptionLabel={(option: ModelProvider) => option.name}
-                getOptionValue={(option: ModelProvider) => String(option.id)}
-                value={
-                  modelProviders.find((provider) => provider.id === customModel.provider_id) ?? null
-                }
-                onChange={(option: ModelProvider | null) =>
-                  setCustomModel((prev) => ({
-                    ...prev,
-                    provider_id: option?.id ?? null,
-                  }))
-                }
+              <Controller
+                name="provider_id"
+                control={control}
+                render={({ field, fieldState }) => (
+                  <ModelOptionSelect
+                    placeholder="모델 공급자를 선택해주세요."
+                    isDisabled={!!selectedModel}
+                    options={modelProviders}
+                    value={field.value}
+                    onChange={field.onChange}
+                    errMessage={fieldState.error?.message}
+                  />
+                )}
               />
               <p className="page-input_item-input-desc">모델을 제공하는 공급자를 선택해주세요.</p>
             </div>
@@ -170,17 +143,18 @@ export default function CustomModelCreatePage() {
           <div className="page-input_item-box">
             <div className="page-input_item-name page-icon-requisite">모델 타입 ID</div>
             <div className="page-input_item-data">
-              <Select
-                options={modelTypes}
-                getOptionLabel={(option: ModelType) => option.name}
-                getOptionValue={(option: ModelType) => String(option.id)}
-                value={modelTypes.find((type) => type.id === customModel.type_id) ?? null}
-                onChange={(option: ModelType | null) =>
-                  setCustomModel((prev) => ({
-                    ...prev,
-                    type_id: option?.id ?? null,
-                  }))
-                }
+              <Controller
+                name="type_id"
+                control={control}
+                render={({ field, fieldState }) => (
+                  <ModelOptionSelect
+                    placeholder="모델 타입을 선택해주세요."
+                    options={modelTypes}
+                    value={field.value}
+                    onChange={field.onChange}
+                    errMessage={fieldState.error?.message}
+                  />
+                )}
               />
               <p className="page-input_item-input-desc">모델의 용도에 맞는 타입을 선택해주세요.</p>
             </div>
@@ -188,17 +162,18 @@ export default function CustomModelCreatePage() {
           <div className="page-input_item-box">
             <div className="page-input_item-name page-icon-requisite">모델 포맷 ID</div>
             <div className="page-input_item-data">
-              <Select
-                options={modelFormats}
-                getOptionLabel={(option: ModelFormat) => option.name}
-                getOptionValue={(option: ModelFormat) => String(option.id)}
-                value={modelFormats.find((format) => format.id === customModel.format_id) ?? null}
-                onChange={(option: ModelFormat | null) =>
-                  setCustomModel((prev) => ({
-                    ...prev,
-                    format_id: option?.id ?? null,
-                  }))
-                }
+              <Controller
+                name="format_id"
+                control={control}
+                render={({ field, fieldState }) => (
+                  <ModelOptionSelect
+                    placeholder="모델 포맷을 선택해주세요."
+                    options={modelFormats}
+                    value={field.value}
+                    onChange={field.onChange}
+                    errMessage={fieldState.error?.message}
+                  />
+                )}
               />
               <p className="page-input_item-input-desc">모델 가중치 파일의 포맷을 선택해주세요.</p>
             </div>
@@ -223,9 +198,11 @@ export default function CustomModelCreatePage() {
                       ? selectedModel.id
                       : '파일을 여기에 드래그하거나 클릭하여 업로드하세요. (파일당 최대 크기 15MB)'
                   }
-                  files={!selectedModel && customModel.file ? [customModel.file] : []}
-                  onAddFile={selectedModel ? () => {} : handleAddFile}
-                  onDeleteFile={handleDeleteFile}
+                  files={!selectedModel && file ? [file] : []}
+                  onAddFile={(added) => {
+                    if (!selectedModel && added[0]) setValue('file', added[0]);
+                  }}
+                  onDeleteFile={() => setValue('file', null)}
                 />
               </div>
             </div>
@@ -233,22 +210,36 @@ export default function CustomModelCreatePage() {
           <div className="page-input_item-box">
             <div className="page-input_item-name">모델 소개</div>
             <div className="page-input_item-data">
-              <Textarea
+              <Controller
                 name="description"
-                value={customModel.description ?? ''}
-                onChange={handleChange}
-                placeholder="설명을 입력해주세요."
+                control={control}
+                render={({ field }) => (
+                  <Textarea
+                    placeholder="설명을 입력해주세요."
+                    name={field.name}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                )}
               />
             </div>
           </div>
           <div className="page-input_item-box">
             <div className="page-input_item-name">샘플 코드</div>
             <div className="page-input_item-data">
-              <Textarea
+              <Controller
                 name="sample_code"
-                value={customModel.sample_code ?? ''}
-                onChange={handleChange}
-                placeholder="샘플 코드를 입력해주세요."
+                control={control}
+                render={({ field }) => (
+                  <Textarea
+                    placeholder="샘플 코드를 입력해주세요."
+                    name={field.name}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                )}
               />
             </div>
           </div>
@@ -261,7 +252,12 @@ export default function CustomModelCreatePage() {
             <Button size="large" color="secondary" onClick={() => navigate('/model/custom-model')}>
               취소
             </Button>
-            <Button size="large" color="primary" onClick={handleSubmit} disabled={isPending}>
+            <Button
+              size="large"
+              color="primary"
+              onClick={handleSubmit(onValid)}
+              disabled={isPending}
+            >
               {isPending ? '생성 중...' : '생성'}
             </Button>
           </div>

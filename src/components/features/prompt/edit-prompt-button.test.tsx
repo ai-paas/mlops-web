@@ -113,6 +113,24 @@ describe('EditPromptButton', () => {
       expect(await screen.findByText('이름은 필수입니다.')).toBeInTheDocument();
       expect(requestSpy).not.toHaveBeenCalled();
     });
+
+    it('본문을 비우고 제출하면 본문 필수 에러가 표시되고 요청이 발생하지 않는다', async () => {
+      const requestSpy = vi.fn();
+      server.use(
+        http.put(`${BASE_URL}/prompts/:surroPromptId`, () => {
+          requestSpy();
+          return HttpResponse.json(mockPrompts[0]);
+        })
+      );
+      const { user } = renderWithUser(<EditPromptButton promptId={301} />);
+
+      await openModal(user);
+      await user.clear(screen.getByPlaceholderText(CONTENT_INPUT));
+      await user.click(screen.getByRole('button', { name: '확인' }));
+
+      expect(await screen.findByText('프롬프트 내용은 필수입니다.')).toBeInTheDocument();
+      expect(requestSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('폼 제출', () => {
@@ -157,10 +175,10 @@ describe('EditPromptButton', () => {
       });
     });
 
-    it('편집 실패 시 실패 토스트가 뜨고 모달은 열려 있다', async () => {
+    it('편집 실패 시 서버 detail을 담은 실패 토스트가 뜨고 모달은 열려 있다', async () => {
       server.use(
         http.put(`${BASE_URL}/prompts/:surroPromptId`, () =>
-          HttpResponse.json({ message: 'error' }, { status: 500 })
+          HttpResponse.json({ detail: '같은 이름의 프롬프트가 있습니다.' }, { status: 409 })
         )
       );
       const { user } = renderWithUser(<EditPromptButton promptId={301} />);
@@ -170,7 +188,11 @@ describe('EditPromptButton', () => {
 
       await waitFor(() => {
         expect(toastOpenSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ status: 'negative', title: '프롬프트 편집 실패' })
+          expect.objectContaining({
+            status: 'negative',
+            title: '프롬프트 편집 실패',
+            children: '같은 이름의 프롬프트가 있습니다.',
+          })
         );
       });
       expect(screen.getByRole('dialog')).toBeInTheDocument();

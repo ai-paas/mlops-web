@@ -1,6 +1,7 @@
 import { AlertDialog, Button, useToast } from '@innogrid/ui';
 import { useState } from 'react';
 import { useDeleteWorkflowTemplate } from '@/hooks/service/workflows';
+import { getServerErrorMessage } from '@/lib/api';
 
 interface DeleteWorkflowTemplateButtonProps {
   templateId?: string;
@@ -31,11 +32,11 @@ export const DeleteWorkflowTemplateButton = ({
         setIsOpen(false);
         onDeleted?.();
       },
-      onError: () => {
+      onError: (error) => {
         toast.open({
           status: 'negative',
           title: '템플릿 삭제 실패',
-          children: '템플릿 삭제 중 오류가 발생했습니다.',
+          children: getServerErrorMessage(error, '템플릿 삭제 중 오류가 발생했습니다.'),
         });
       },
     });

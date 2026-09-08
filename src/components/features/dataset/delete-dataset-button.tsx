@@ -2,6 +2,7 @@ import { useDeleteDataset } from '@/hooks/service/datasets';
 import { AlertDialog, Button, useToast } from '@innogrid/ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { getServerErrorMessage } from '@/lib/api';
 
 export const DeleteDatasetButton = ({
   datasetId,
@@ -30,11 +31,11 @@ export const DeleteDatasetButton = ({
           navigate(redirect);
         }
       },
-      onError: () => {
+      onError: (error) => {
         toast.open({
           status: 'negative',
           title: '데이터셋 삭제 실패',
-          children: '데이터셋 삭제 중 오류가 발생했습니다.',
+          children: getServerErrorMessage(error, '데이터셋 삭제 중 오류가 발생했습니다.'),
         });
       },
     });

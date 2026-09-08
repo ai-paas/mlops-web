@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useGetService, useUpdateService } from '@/hooks/service/services';
+import { getServerErrorMessage } from '@/lib/api';
 
 const schema = z.object({
   name: z.string().min(1, '이름은 필수입니다.'),
@@ -60,11 +61,11 @@ export const EditServiceButton = ({ serviceId }: { serviceId?: string }) => {
           });
           closeModal();
         },
-        onError: () => {
+        onError: (error) => {
           toast.open({
             status: 'negative',
             title: '서비스 편집 실패',
-            children: '서비스 편집 중 오류가 발생했습니다.',
+            children: getServerErrorMessage(error, '서비스 편집 중 오류가 발생했습니다.'),
           });
         },
       }

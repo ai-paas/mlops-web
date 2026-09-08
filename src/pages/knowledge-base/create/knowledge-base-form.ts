@@ -31,74 +31,40 @@ export const KNOWLEDGE_BASE_FILE_EXTENSIONS = [
 /** 배포 상태 조회 API가 없어 실호출로 검증된 모델만 생성 화면에 노출한다. */
 export const VERIFIED_EMBEDDING_MODEL_IDS = [KNOWLEDGE_BASE_DEFAULTS.embeddingModelId] as const;
 
-export interface KnowledgeBaseFormOption {
-  id: number;
-  name: string;
-  description?: string | null;
-}
-
-export interface KnowledgeBaseFormValues {
-  name: string;
-  description: string;
-  file: File | null;
-  chunk_size: number;
-  chunk_overlap: number;
-  chunk_type: KnowledgeBaseFormOption;
-  language: KnowledgeBaseFormOption;
-  embedding_model: KnowledgeBaseFormOption;
-  search_method: KnowledgeBaseFormOption;
-  top_k: number;
-  threshold: number;
-}
-
-export type KnowledgeBaseFormField = keyof KnowledgeBaseFormValues;
-export type KnowledgeBaseFormErrors = Partial<Record<KnowledgeBaseFormField, string>>;
-
-export const createInitialKnowledgeBaseFormValues = (): KnowledgeBaseFormValues => ({
-  name: '',
-  description: '',
-  file: null,
-  chunk_size: KNOWLEDGE_BASE_DEFAULTS.chunkSize,
-  chunk_overlap: KNOWLEDGE_BASE_DEFAULTS.chunkOverlap,
-  chunk_type: {
-    id: KNOWLEDGE_BASE_DEFAULTS.chunkTypeId,
-    name: 'RecursiveCharacterSplitter',
-  },
-  language: { id: KNOWLEDGE_BASE_DEFAULTS.languageId, name: 'KO' },
-  embedding_model: {
-    id: KNOWLEDGE_BASE_DEFAULTS.embeddingModelId,
-    name: 'bge-m3',
-  },
-  search_method: { id: KNOWLEDGE_BASE_DEFAULTS.searchMethodId, name: 'vector' },
-  top_k: KNOWLEDGE_BASE_DEFAULTS.topK,
-  threshold: KNOWLEDGE_BASE_DEFAULTS.threshold,
-});
-
 const getExtension = (fileName: string) => fileName.split('.').pop()?.toLowerCase() ?? '';
 
-const basicSettingsSchema = z.object({
-  name: z.string().trim().min(1, '이름을 입력해주세요.'),
-  description: z.string(),
-  file: z
-    .instanceof(File, { error: '파일을 업로드해주세요.' })
-    .refine(
-      (file) =>
-        KNOWLEDGE_BASE_FILE_EXTENSIONS.includes(
-          getExtension(file.name) as (typeof KNOWLEDGE_BASE_FILE_EXTENSIONS)[number]
-        ),
-      '지원되는 문서 파일을 업로드해주세요.'
-    ),
-});
-
-const positiveOptionSchema = (message: string) =>
+const optionSchema = (message: string) =>
   z.object({
     id: z.number().int().positive(message),
     name: z.string(),
     description: z.string().nullable().optional(),
   });
 
-const embeddingSettingsSchema = z
+export type KnowledgeBaseFormOption = z.infer<ReturnType<typeof optionSchema>>;
+
+/**
+ * 생성 폼 전체 스키마 — RHF zodResolver에 그대로 넣는다.
+ * 단계별 검증은 KNOWLEDGE_BASE_STEP_FIELDS로 trigger 대상 필드만 좁혀서 한다.
+ */
+export const knowledgeBaseFormSchema = z
   .object({
+    name: z.string().trim().min(1, '이름을 입력해주세요.'),
+    description: z.string(),
+    // 파일은 업로드 전 null — 필수·확장자 검사를 각각의 문구로 알린다.
+    // 반환 타입을 boolean으로 명시하는 이유: TS가 `file !== null`을 타입 가드로 추론하면
+    // zod가 출력 타입을 File로 좁혀 폼 값(File | null)과 어긋난다.
+    file: z
+      .instanceof(File)
+      .nullable()
+      .refine((file): boolean => file !== null, '파일을 업로드해주세요.')
+      .refine(
+        (file) =>
+          file === null ||
+          KNOWLEDGE_BASE_FILE_EXTENSIONS.includes(
+            getExtension(file.name) as (typeof KNOWLEDGE_BASE_FILE_EXTENSIONS)[number]
+          ),
+        '지원되는 문서 파일을 업로드해주세요.'
+      ),
     chunk_size: z
       .number({ error: '청크 길이를 입력해주세요.' })
       .int('청크 길이는 정수여야 합니다.')
@@ -114,16 +80,16 @@ const embeddingSettingsSchema = z
       .number({ error: '청크 중첩을 입력해주세요.' })
       .int('청크 중첩은 정수여야 합니다.')
       .min(0, '청크 중첩은 0 이상이어야 합니다.'),
-    chunk_type: positiveOptionSchema('청크 타입을 선택해주세요.'),
-    language: positiveOptionSchema('언어를 선택해주세요.'),
-    embedding_model: positiveOptionSchema('임베딩 모델을 선택해주세요.').refine(
+    chunk_type: optionSchema('청크 타입을 선택해주세요.'),
+    language: optionSchema('언어를 선택해주세요.'),
+    embedding_model: optionSchema('임베딩 모델을 선택해주세요.').refine(
       (model) =>
         VERIFIED_EMBEDDING_MODEL_IDS.includes(
           model.id as (typeof VERIFIED_EMBEDDING_MODEL_IDS)[number]
         ),
       '배포가 확인된 임베딩 모델을 선택해주세요.'
     ),
-    search_method: positiveOptionSchema('검색 타입을 선택해주세요.'),
+    search_method: optionSchema('검색 타입을 선택해주세요.'),
     top_k: z
       .number({ error: 'Top K를 입력해주세요.' })
       .int('Top K는 정수여야 합니다.')
@@ -156,38 +122,42 @@ const embeddingSettingsSchema = z
     }
   });
 
-const completeSchema = z.intersection(basicSettingsSchema, embeddingSettingsSchema);
+export type KnowledgeBaseFormValues = z.infer<typeof knowledgeBaseFormSchema>;
 
-const issuesToErrors = (issues: z.core.$ZodIssue[]): KnowledgeBaseFormErrors => {
-  const errors: KnowledgeBaseFormErrors = {};
+/** 스텝퍼 단계별로 trigger할 필드 — 두 목록을 합치면 폼 전체 필드다 */
+export const KNOWLEDGE_BASE_STEP_FIELDS = {
+  basic: ['name', 'description', 'file'],
+  embedding: [
+    'chunk_size',
+    'chunk_overlap',
+    'chunk_type',
+    'language',
+    'embedding_model',
+    'search_method',
+    'top_k',
+    'threshold',
+  ],
+} as const satisfies Record<string, readonly (keyof KnowledgeBaseFormValues)[]>;
 
-  issues.forEach((issue) => {
-    const field = issue.path[0];
-    if (typeof field === 'string' && !(field in errors)) {
-      errors[field as KnowledgeBaseFormField] = issue.message;
-    }
-  });
-
-  return errors;
-};
-
-export const validateKnowledgeBaseForm = (
-  values: KnowledgeBaseFormValues,
-  section: 'basic' | 'embedding' | 'all'
-): KnowledgeBaseFormErrors => {
-  const schema =
-    section === 'basic'
-      ? basicSettingsSchema
-      : section === 'embedding'
-        ? embeddingSettingsSchema
-        : completeSchema;
-  const result = schema.safeParse(values);
-
-  return result.success ? {} : issuesToErrors(result.error.issues);
-};
-
-export const getFirstKnowledgeBaseFormError = (errors: KnowledgeBaseFormErrors) =>
-  Object.values(errors)[0];
+export const createInitialKnowledgeBaseFormValues = (): KnowledgeBaseFormValues => ({
+  name: '',
+  description: '',
+  file: null,
+  chunk_size: KNOWLEDGE_BASE_DEFAULTS.chunkSize,
+  chunk_overlap: KNOWLEDGE_BASE_DEFAULTS.chunkOverlap,
+  chunk_type: {
+    id: KNOWLEDGE_BASE_DEFAULTS.chunkTypeId,
+    name: 'RecursiveCharacterSplitter',
+  },
+  language: { id: KNOWLEDGE_BASE_DEFAULTS.languageId, name: 'KO' },
+  embedding_model: {
+    id: KNOWLEDGE_BASE_DEFAULTS.embeddingModelId,
+    name: 'bge-m3',
+  },
+  search_method: { id: KNOWLEDGE_BASE_DEFAULTS.searchMethodId, name: 'vector' },
+  top_k: KNOWLEDGE_BASE_DEFAULTS.topK,
+  threshold: KNOWLEDGE_BASE_DEFAULTS.threshold,
+});
 
 export const buildKnowledgeBaseCreatePayload = (values: KnowledgeBaseFormValues) => {
   const payload = new FormData();

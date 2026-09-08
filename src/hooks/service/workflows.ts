@@ -37,7 +37,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TimeoutError, type HTTPError } from 'ky';
 
 export const useGetWorkflows = (params: WorkflowListParams) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.workflows.list(params),
     queryFn: () => api.get<Page<Workflow>>('workflows/', { searchParams: { ...params } }).json(),
   });
@@ -51,11 +51,12 @@ export const useGetWorkflows = (params: WorkflowListParams) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetWorkflowComponentTypes = () => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.workflows.componentTypes(),
     queryFn: () => api.get<GetWorkflowComponentTypes>('workflows/component-types').json(),
   });
@@ -64,11 +65,12 @@ export const useGetWorkflowComponentTypes = () => {
     workflowComponentTypes: data?.data ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetTemplates = (params: WorkflowTemplateListParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.workflows.templates.list(params),
     queryFn: () =>
       api
@@ -87,11 +89,12 @@ export const useGetTemplates = (params: WorkflowTemplateListParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useValidateWorkflow = () => {
-  const { mutate, isPending, isError, isSuccess, data, reset } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess, data, reset } = useMutation({
     mutationFn: (data: ValidateWorkflowRequest) =>
       api.post('workflows/validate', { json: data }).json<ValidateWorkflowResponse>(),
   });
@@ -101,6 +104,7 @@ export const useValidateWorkflow = () => {
     validation: data,
     isPending,
     isError,
+    error,
     isSuccess,
     reset,
   };
@@ -109,7 +113,7 @@ export const useValidateWorkflow = () => {
 export const useCreateWorkflow = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (data: CreateWorkflowRequest) =>
       api.post('workflows/', { json: data }).json<Workflow>(),
     onSuccess: () => {
@@ -121,6 +125,7 @@ export const useCreateWorkflow = () => {
     createWorkflow: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -128,7 +133,7 @@ export const useCreateWorkflow = () => {
 export const useCreateWorkflowViaTemplate = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (data: CreateWorkflowRequest) =>
       api.post('workflows/', { json: data }).json<Workflow>(),
     onSuccess: () => {
@@ -140,12 +145,13 @@ export const useCreateWorkflowViaTemplate = () => {
     createWorkflowViaTemplate: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useGetWorkflow = (workflowId?: number | string, enabled: boolean = true) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.workflows.detail(workflowId),
     queryFn: () => api.get(`workflows/${workflowId}`).json<WorkflowRead>(),
     enabled: enabled && !!workflowId,
@@ -155,11 +161,12 @@ export const useGetWorkflow = (workflowId?: number | string, enabled: boolean = 
     workflow: data,
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetWorkflowTemplate = (templateId?: string) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.workflows.templates.detail(templateId),
     queryFn: () => api.get(`workflows/templates/${templateId}`).json<WorkflowTemplate>(),
     enabled: !!templateId,
@@ -169,13 +176,14 @@ export const useGetWorkflowTemplate = (templateId?: string) => {
     workflowTemplate: data,
     isPending,
     isError,
+    error,
   };
 };
 
 export const useCreateWorkflowTemplate = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (data: CreateWorkflowTemplateRequest) =>
       api.post('workflows/templates', { json: data }).json<string>(),
     onSuccess: () => {
@@ -187,6 +195,7 @@ export const useCreateWorkflowTemplate = () => {
     createWorkflowTemplate: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -194,7 +203,7 @@ export const useCreateWorkflowTemplate = () => {
 export const useCloneWorkflowTemplate = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({ templateId, workflow_name, service_id }: CloneWorkflowTemplateRequest) => {
       const searchParams: Record<string, string | number> = { workflow_name };
 
@@ -215,6 +224,7 @@ export const useCloneWorkflowTemplate = () => {
     cloneWorkflowTemplate: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -222,7 +232,7 @@ export const useCloneWorkflowTemplate = () => {
 export const useUpdateWorkflow = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({ workflowId, ...data }: UpdateWorkflowRequest) =>
       api.put(`workflows/${workflowId}`, { json: data }).json<Workflow>(),
     onSuccess: () => {
@@ -234,6 +244,7 @@ export const useUpdateWorkflow = () => {
     updateWorkflow: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -241,7 +252,7 @@ export const useUpdateWorkflow = () => {
 export const useUpdateWorkflowTemplate = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({ templateId, ...data }: UpdateWorkflowTemplateRequest) =>
       api.put(`workflows/templates/${templateId}`, { json: data }).json<WorkflowTemplate>(),
     onSuccess: () => {
@@ -253,6 +264,7 @@ export const useUpdateWorkflowTemplate = () => {
     updateWorkflowTemplate: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -260,7 +272,7 @@ export const useUpdateWorkflowTemplate = () => {
 export const useDeleteWorkflow = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (workflowId: string) =>
       api.delete(`workflows/${workflowId}`).json<DeleteWorkflowResponse>(),
     onSuccess: () => {
@@ -272,6 +284,7 @@ export const useDeleteWorkflow = () => {
     deleteWorkflow: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -279,7 +292,7 @@ export const useDeleteWorkflow = () => {
 export const useDeleteWorkflowTemplate = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: async (templateId: string) => {
       await api.delete(`workflows/templates/${templateId}`);
     },
@@ -292,6 +305,7 @@ export const useDeleteWorkflowTemplate = () => {
     deleteWorkflowTemplate: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -306,7 +320,7 @@ export const useGetWorkflowStatus = (
   surroWorkflowId?: string,
   { enabled = true, polling = false }: { enabled?: boolean; polling?: boolean } = {}
 ) => {
-  const { data, isPending, isError, refetch } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: queryKeys.workflows.status(surroWorkflowId),
     queryFn: () => api.get(`workflows/${surroWorkflowId}/status`).json<WorkflowStatusResponse>(),
     enabled: enabled && !!surroWorkflowId,
@@ -320,12 +334,13 @@ export const useGetWorkflowStatus = (
     isDeploying: isWorkflowDeploying(data),
     isPending,
     isError,
+    error,
     refetch,
   };
 };
 
 export const useGetWorkflowModels = (surroWorkflowId?: string) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.workflows.models(surroWorkflowId),
     queryFn: () => api.get<WorkflowModelsResponse>(`workflows/${surroWorkflowId}/models`).json(),
     enabled: !!surroWorkflowId,
@@ -342,13 +357,14 @@ export const useGetWorkflowModels = (surroWorkflowId?: string) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useFinalizeWorkflowDeletion = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (params: { surro_workflow_id: string }) =>
       api
         .post(`workflows/${params.surro_workflow_id}/finalize-deletion`)
@@ -362,6 +378,7 @@ export const useFinalizeWorkflowDeletion = () => {
     finalizeWorkflowDeletion: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -385,7 +402,7 @@ export const isExecuteTimeoutError = async (error: unknown) => {
 export const useExecuteWorkflow = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (params: { surro_workflow_id: string }) =>
       api.post(`workflows/${params.surro_workflow_id}/execute`).json<ExecuteWorkflowResponse>(),
     onSuccess: () => {
@@ -397,6 +414,7 @@ export const useExecuteWorkflow = () => {
     executeWorkflow: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -404,7 +422,7 @@ export const useExecuteWorkflow = () => {
 export const useUpdateComponentDeployStatus = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({
       surro_workflow_id,
       component_id,
@@ -424,12 +442,13 @@ export const useUpdateComponentDeployStatus = () => {
     updateComponentDeployStatus: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useTestRagWorkflow = () => {
-  const { mutate, isPending, isError, isSuccess, data } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess, data } = useMutation({
     mutationFn: (params: { surro_workflow_id: string; text: string }) => {
       const body = new URLSearchParams({ text: params.text });
 
@@ -447,12 +466,13 @@ export const useTestRagWorkflow = () => {
     testResult: data,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useTestMLWorkflow = () => {
-  const { mutate, isPending, isError, isSuccess, data } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess, data } = useMutation({
     mutationFn: (params: { surro_workflow_id: string; image: File }) => {
       const formData = new FormData();
       formData.append('image', params.image);
@@ -469,6 +489,7 @@ export const useTestMLWorkflow = () => {
     testResult: data,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -488,6 +509,7 @@ export const useTestProteinClassificationWorkflow = () => {
     testResult: mutation.data,
     isPending: mutation.isPending,
     isError: mutation.isError,
+    error: mutation.error,
     isSuccess: mutation.isSuccess,
   };
 };
@@ -507,6 +529,7 @@ export const useTestFillMaskWorkflow = () => {
     testResult: mutation.data,
     isPending: mutation.isPending,
     isError: mutation.isError,
+    error: mutation.error,
     isSuccess: mutation.isSuccess,
   };
 };
@@ -526,6 +549,7 @@ export const useTestProteinStructurePredictionWorkflow = () => {
     testResult: mutation.data,
     isPending: mutation.isPending,
     isError: mutation.isError,
+    error: mutation.error,
     isSuccess: mutation.isSuccess,
   };
 };
@@ -533,7 +557,7 @@ export const useTestProteinStructurePredictionWorkflow = () => {
 export const useCleanupWorkflow = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (params: { surro_workflow_id: string }) =>
       api.post(`workflows/${params.surro_workflow_id}/cleanup`).json<CleanupWorkflowResponse>(),
     onSuccess: () => {
@@ -545,6 +569,7 @@ export const useCleanupWorkflow = () => {
     cleanupWorkflow: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -562,7 +587,7 @@ export const useFinalizeWorkflowCleanup = (params: {
 }) => {
   const enabled = Boolean(params.enabled && params.surro_workflow_id);
 
-  const { data, isFetching, isError } = useQuery({
+  const { data, isFetching, isError, error } = useQuery({
     queryKey: queryKeys.workflows.finalizeCleanup(params.surro_workflow_id),
     queryFn: () =>
       api
@@ -585,5 +610,6 @@ export const useFinalizeWorkflowCleanup = (params: {
     result: data,
     isPolling: isFetching || data?.status === 'in_progress',
     isError,
+    error,
   };
 };

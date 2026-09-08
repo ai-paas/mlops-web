@@ -10,6 +10,7 @@ import {
 } from '@/hooks/service/workflows';
 import type { WorkflowModel, WorkflowModelTask } from '@/types/workflow';
 import styles from '@/pages/workflow/workflow.module.scss';
+import { getServerErrorMessage } from '@/lib/api';
 
 type TestKind =
   | 'rag'
@@ -120,10 +121,13 @@ export function WorkflowTestTab({
             content: data.final_result ?? JSON.stringify(data.results, null, 2),
           });
         },
-        onError: () => {
+        onError: (error) => {
           appendChatMessage({
             role: 'assistant',
-            content: '요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+            content: getServerErrorMessage(
+              error,
+              '요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+            ),
             isError: true,
           });
         },

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useCleanupWorkflow, useFinalizeWorkflowCleanup } from '@/hooks/service/workflows';
 import { queryKeys } from '@/lib/query-keys';
+import { getServerErrorMessage } from '@/lib/api';
 
 interface StopWorkflowDeploymentButtonProps {
   workflowId?: string;
@@ -31,11 +32,11 @@ export const StopWorkflowDeploymentButton = ({ workflowId }: StopWorkflowDeploym
         onSuccess: () => {
           setIsCleanupStarted(true);
         },
-        onError: () => {
+        onError: (error) => {
           toast.open({
             status: 'negative',
             title: '배포 중지 실패',
-            children: '워크플로우 배포 중지 중 오류가 발생했습니다.',
+            children: getServerErrorMessage(error, '워크플로우 배포 중지 중 오류가 발생했습니다.'),
           });
         },
       }

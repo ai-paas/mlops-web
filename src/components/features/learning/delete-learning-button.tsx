@@ -2,6 +2,7 @@ import { useDeleteLearning } from '@/hooks/service/learning';
 import { AlertDialog, Button, useToast } from '@innogrid/ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { getServerErrorMessage } from '@/lib/api';
 
 export const DeleteLearningButton = ({
   experimentId,
@@ -30,11 +31,11 @@ export const DeleteLearningButton = ({
           navigate(redirect, { replace: true });
         }
       },
-      onError: () => {
+      onError: (error) => {
         toast.open({
           status: 'negative',
           title: '학습 삭제 실패',
-          children: '학습 삭제 중 오류가 발생했습니다.',
+          children: getServerErrorMessage(error, '학습 삭제 중 오류가 발생했습니다.'),
         });
       },
     });

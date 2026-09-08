@@ -18,7 +18,15 @@ export { mockDatasets, mockDatasetKinds } from './handlers/datasets';
 export { mockKnowledgeBase } from './handlers/knowledgebase';
 export { mockLearnings } from './handlers/learning';
 export { mockMembers } from './handlers/members';
-export { mockCustomModels, mockModelCatalogs, mockModels } from './handlers/models';
+export {
+  mockCustomModels,
+  mockImprovementTaskTypes,
+  mockModelCatalogs,
+  mockModelFormats,
+  mockModelProviders,
+  mockModels,
+  mockModelTypes,
+} from './handlers/models';
 export { mockPod } from './handlers/monitoring';
 export { mockPrompts, mockPromptVariableTypes } from './handlers/prompts';
 export { mockServices, mockServiceDetail } from './handlers/services';

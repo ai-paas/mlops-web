@@ -1,5 +1,5 @@
 import { HTTPError, TimeoutError, type NormalizedOptions } from 'ky';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { queryClient, shouldRetryQuery } from './react-query-provider';
 
 // 전역 재시도 정책(TODO 14) — 4xx·타임아웃은 즉시 중단, 5xx·네트워크만 제한 횟수 재시도.
@@ -37,5 +37,39 @@ describe('queryClient 기본 옵션', () => {
     const { queries, mutations } = queryClient.getDefaultOptions();
     expect(queries?.retry).toBe(shouldRetryQuery);
     expect(mutations?.retry).toBe(false);
+  });
+
+  it('QueryCache/MutationCache의 공통 onError가 실패를 로깅한다 (사용자 피드백은 호출부 몫)', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      // 캐시 설정 콜백은 제네릭이 넓어 직접 호출 시 타입이 맞지 않는다 — 검증에 필요한 최소 시그니처로 본다
+      const queryOnError = queryClient.getQueryCache().config.onError as
+        | ((error: Error, query: unknown) => void)
+        | undefined;
+      const mutationOnError = queryClient.getMutationCache().config.onError as
+        | ((error: Error, variables: unknown, context: unknown, mutation: unknown) => void)
+        | undefined;
+      expect(queryOnError).toBeDefined();
+      expect(mutationOnError).toBeDefined();
+
+      const query = queryClient.getQueryCache().build(queryClient, { queryKey: ['services', 'list'] });
+      queryOnError?.(new Error('boom'), query);
+      expect(consoleError).toHaveBeenCalledWith(
+        '[query] 실패',
+        expect.objectContaining({ queryKey: ['services', 'list'], message: 'boom' })
+      );
+
+      const mutation = queryClient
+        .getMutationCache()
+        .build(queryClient, { mutationKey: ['deleteService'], mutationFn: async () => undefined });
+      mutationOnError?.(new Error('bang'), undefined, undefined, mutation);
+      expect(consoleError).toHaveBeenCalledWith(
+        '[mutation] 실패',
+        expect.objectContaining({ mutationKey: ['deleteService'], message: 'bang' })
+      );
+    } finally {
+      consoleError.mockRestore();
+      queryClient.clear();
+    }
   });
 });

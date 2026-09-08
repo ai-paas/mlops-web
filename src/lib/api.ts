@@ -1,4 +1,4 @@
-import ky from 'ky';
+import ky, { HTTPError, TimeoutError } from 'ky';
 
 type RefreshTokenResponse = {
   access_token?: string;
@@ -35,6 +35,22 @@ export const subscribeAccessToken = (listener: () => void) => {
 
 export const clearAccessToken = () => {
   setAccessToken(null);
+};
+
+// beforeError가 응답 본문에서 추출한 서버 detail(사용자에게 그대로 보여줄 수 있는 문자열)을 에러별로 기록한다.
+const serverDetails = new WeakMap<HTTPError, string>();
+
+// 사용자에게 보여줄 오류 문구 — 서버가 detail을 보냈으면 그것을, 아니면 호출부의 기본 문구를 쓴다.
+// 타임아웃·네트워크 단절은 원인을 알 수 있는 고정 문구로 바꾼다. 토스트/인라인 에러 표시의 공통 진입점.
+export const getServerErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof HTTPError) return serverDetails.get(error) ?? fallback;
+  if (error instanceof TimeoutError) {
+    return '응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+  }
+  if (error instanceof TypeError && /network|fetch|load failed/i.test(error.message)) {
+    return '네트워크 연결을 확인해주세요.';
+  }
+  return fallback;
 };
 
 const queueRequest = (request: Request) =>
@@ -110,6 +126,7 @@ export const api = ky.create({
           const body = (await error.response.clone().json()) as { detail?: unknown };
           if (typeof body.detail === 'string' && body.detail.trim()) {
             error.message = body.detail;
+            serverDetails.set(error, body.detail);
           }
         } catch {
           // keep original error

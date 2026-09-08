@@ -11,7 +11,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export const useGetPrompts = (params: GetPromptsParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.prompts.list(params),
     queryFn: () => api.get('prompts/', { searchParams: { ...params } }).json<Page<Prompt>>(),
   });
@@ -25,11 +25,12 @@ export const useGetPrompts = (params: GetPromptsParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetPromptVariableTypes = () => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.prompts.variableTypes(),
     queryFn: () => api.get('prompts/variable-types').json<PromptVariableTypeList>(),
   });
@@ -38,13 +39,14 @@ export const useGetPromptVariableTypes = () => {
     availableTypes: data?.available_types ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
 export const useCreatePrompt = () => {
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending, isError, isSuccess } = useMutation({
+  const { mutateAsync, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (data: CreatePromptRequest) => api.post('prompts/', { json: data }).json<Prompt>(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.prompts.all });
@@ -55,12 +57,13 @@ export const useCreatePrompt = () => {
     createPrompt: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useGetPrompt = (surro_prompt_id?: number) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey:
       surro_prompt_id !== undefined
         ? queryKeys.prompts.detail(surro_prompt_id)
@@ -73,13 +76,14 @@ export const useGetPrompt = (surro_prompt_id?: number) => {
     prompt: data,
     isPending,
     isError,
+    error,
   };
 };
 
 export const useUpdatePrompt = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({ surro_prompt_id, ...data }: UpdatePromptRequest) =>
       api.put(`prompts/${surro_prompt_id}`, { json: data }).json<Prompt>(),
     onSuccess: () => {
@@ -92,6 +96,7 @@ export const useUpdatePrompt = () => {
     updatePrompt: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -99,7 +104,7 @@ export const useUpdatePrompt = () => {
 export const useDeletePrompt = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: async (surro_prompt_id: number) => {
       await api.delete(`prompts/${surro_prompt_id}`);
     },
@@ -113,6 +118,7 @@ export const useDeletePrompt = () => {
     deletePrompt: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };

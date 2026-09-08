@@ -7,6 +7,7 @@ import {
   DEFAULT_TIMEOUT_MS,
   api,
   getAccessToken,
+  getServerErrorMessage,
   getOrCreateRefreshPromise,
   refreshAccessToken,
   setAccessToken,
@@ -459,6 +460,66 @@ describe('refreshAccessToken', () => {
 
     await expect(refreshAccessToken()).rejects.toThrow('토큰 재발급 응답이 올바르지 않습니다.');
     expect(getAccessToken()).toBeNull();
+  });
+});
+
+// ============================================
+// getServerErrorMessage — 사용자 오류 문구 (TODO 15)
+// ============================================
+describe('getServerErrorMessage', () => {
+  const FALLBACK = '요청 처리 중 오류가 발생했습니다.';
+
+  it('서버가 detail 문자열을 보내면 그대로 사용한다', async () => {
+    setAccessToken('valid-token');
+    server.use(
+      http.get(`${BASE_URL}/forbidden`, () =>
+        HttpResponse.json({ detail: '권한이 없습니다.' }, { status: 403 })
+      )
+    );
+
+    const error = await api.get('forbidden').then(
+      () => null,
+      (caught: unknown) => caught
+    );
+
+    expect(getServerErrorMessage(error, FALLBACK)).toBe('권한이 없습니다.');
+  });
+
+  it('detail이 없거나 문자열이 아니면(422 검증 배열 등) 호출부 기본 문구를 쓴다', async () => {
+    setAccessToken('valid-token');
+    server.use(
+      http.get(`${BASE_URL}/plain`, () => HttpResponse.json({ message: 'boom' }, { status: 500 })),
+      http.get(`${BASE_URL}/validation`, () =>
+        HttpResponse.json({ detail: [{ msg: 'Field required' }] }, { status: 422 })
+      )
+    );
+
+    const plain = await api.get('plain').then(
+      () => null,
+      (caught: unknown) => caught
+    );
+    const validation = await api.get('validation').then(
+      () => null,
+      (caught: unknown) => caught
+    );
+
+    expect(getServerErrorMessage(plain, FALLBACK)).toBe(FALLBACK);
+    expect(getServerErrorMessage(validation, FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('타임아웃·네트워크 단절은 원인을 알 수 있는 문구로, 그 외 에러는 기본 문구로 바꾼다', () => {
+    const request = new Request('http://localhost/x');
+
+    expect(getServerErrorMessage(new TimeoutError(request), FALLBACK)).toBe(
+      '응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.'
+    );
+    expect(getServerErrorMessage(new TypeError('Failed to fetch'), FALLBACK)).toBe(
+      '네트워크 연결을 확인해주세요.'
+    );
+    // fetch와 무관한 TypeError(코드 결함)는 네트워크 문구로 위장하지 않는다
+    expect(getServerErrorMessage(new TypeError('x is not a function'), FALLBACK)).toBe(FALLBACK);
+    expect(getServerErrorMessage(new Error('unknown'), FALLBACK)).toBe(FALLBACK);
+    expect(getServerErrorMessage(undefined, FALLBACK)).toBe(FALLBACK);
   });
 });
 

@@ -2,6 +2,7 @@ import { useDeleteService } from '@/hooks/service/services';
 import { AlertDialog, Button, useToast } from '@innogrid/ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { getServerErrorMessage } from '@/lib/api';
 
 export const DeleteServiceButton = ({ serviceId }: { serviceId?: string }) => {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -27,11 +28,11 @@ export const DeleteServiceButton = ({ serviceId }: { serviceId?: string }) => {
         setIsAlertOpen(false);
         navigate('/service');
       },
-      onError: () => {
+      onError: (error) => {
         toast.open({
           status: 'negative',
           title: '서비스 삭제 실패',
-          children: '서비스 삭제 중 오류가 발생했습니다.',
+          children: getServerErrorMessage(error, '서비스 삭제 중 오류가 발생했습니다.'),
         });
       },
     });

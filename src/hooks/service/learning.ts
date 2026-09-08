@@ -17,7 +17,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export const useGetLearnings = (params: GetLearningParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.learning.list(params),
     queryFn: () => api.get<Page<Learning>>('learning', { searchParams: { ...params } }).json(),
   });
@@ -31,11 +31,12 @@ export const useGetLearnings = (params: GetLearningParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetLearning = (experiment_id?: number) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.learning.detail(experiment_id),
     queryFn: () => api.get<LearningDetail>(`learning/${experiment_id}`).json(),
     enabled: !!experiment_id,
@@ -45,11 +46,12 @@ export const useGetLearning = (experiment_id?: number) => {
     learning: data,
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetLearningStatus = (experiment_id?: number) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.learning.status(experiment_id),
     queryFn: () => api.get<LearningStatus>(`learning/${experiment_id}/status`).json(),
     enabled: !!experiment_id,
@@ -59,13 +61,14 @@ export const useGetLearningStatus = (experiment_id?: number) => {
     status: data,
     isPending,
     isError,
+    error,
   };
 };
 
 export const useSubmitTraining = () => {
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending, isError, isSuccess } = useMutation({
+  const { mutateAsync, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (body: SubmitTrainingRequest) => {
       const formData = new FormData();
       Object.entries(body).forEach(([key, value]) => {
@@ -86,6 +89,7 @@ export const useSubmitTraining = () => {
     submitTraining: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -93,7 +97,7 @@ export const useSubmitTraining = () => {
 export const useRegisterModel = () => {
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending, isError, isSuccess } = useMutation({
+  const { mutateAsync, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (body: RegisterModelRequest) =>
       api.post('learning/model/registration', { json: body }).json<RegisterModelResponse>(),
     onSuccess: () => {
@@ -105,6 +109,7 @@ export const useRegisterModel = () => {
     registerModel: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -112,7 +117,7 @@ export const useRegisterModel = () => {
 export const useUpdateLearning = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({ experimentId, ...body }: UpdateLearningRequest) =>
       api.patch(`learning/${experimentId}`, { json: body }).json<LearningReadResponse>(),
     onSuccess: () => {
@@ -124,6 +129,7 @@ export const useUpdateLearning = () => {
     updateLearning: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -131,7 +137,7 @@ export const useUpdateLearning = () => {
 export const useUpdateLearningInternalAccess = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({ experimentId, ...body }: UpdateLearningInternalAccessRequest) =>
       api
         .patch(`learning/${experimentId}/internal-access`, { json: body })
@@ -145,6 +151,7 @@ export const useUpdateLearningInternalAccess = () => {
     updateLearningInternalAccess: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -152,7 +159,7 @@ export const useUpdateLearningInternalAccess = () => {
 export const useDeleteLearning = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (experimentId: number) =>
       api.delete(`learning/${experimentId}`).json<Record<string, unknown>>(),
     onSuccess: () => {
@@ -164,6 +171,7 @@ export const useDeleteLearning = () => {
     deleteLearning: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };

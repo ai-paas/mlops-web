@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HTTPError, TimeoutError } from 'ky';
 import type { ReactNode } from 'react';
 
@@ -14,8 +14,24 @@ export const shouldRetryQuery = (failureCount: number, error: unknown) => {
   return failureCount < MAX_QUERY_RETRIES;
 };
 
+// 전역 에러 공통 처리는 로깅이다. 사용자 피드백은 호출부가 맡는다 — 쿼리는 페이지의 인라인 에러 상태,
+// 뮤테이션은 동작별 제목을 가진 로컬 토스트(본문은 getServerErrorMessage로 서버 detail 노출).
+// 전역 토스트를 겹치면 이미 토스트를 띄우는 뮤테이션 20여 곳과 중복되고 폴링·백그라운드 refetch 실패가 토스트를 남발한다.
 // eslint-disable-next-line react-refresh/only-export-components
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      console.error('[query] 실패', { queryKey: query.queryKey, message: error.message });
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      console.error('[mutation] 실패', {
+        mutationKey: mutation.options.mutationKey,
+        message: error.message,
+      });
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5분

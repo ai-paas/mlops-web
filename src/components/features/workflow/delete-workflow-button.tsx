@@ -2,6 +2,7 @@ import { useDeleteWorkflow, useFinalizeWorkflowDeletion } from '@/hooks/service/
 import { AlertDialog, Button, useToast } from '@innogrid/ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { getServerErrorMessage } from '@/lib/api';
 
 interface DeleteWorkflowButtonProps {
   workflowId?: string;
@@ -65,11 +66,11 @@ export const DeleteWorkflowButton = ({
           }
         );
       },
-      onError: () => {
+      onError: (error) => {
         toast.open({
           status: 'negative',
           title: '워크플로우 삭제 실패',
-          children: '워크플로우 삭제 중 오류가 발생했습니다.',
+          children: getServerErrorMessage(error, '워크플로우 삭제 중 오류가 발생했습니다.'),
         });
       },
     });

@@ -1,23 +1,18 @@
 import { AlertDialog, Button } from '@innogrid/ui';
 import { useState } from 'react';
+import type { UseFormReturn } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import { useCreateMember } from '@/hooks/service/member';
+import { getServerErrorMessage } from '@/lib/api';
 import type { CreateMemberRequest } from '@/types/member';
+import type { MemberCreateFormValues } from './member-form';
 
 interface CreateMemberActionProps {
-  formData: {
-    name: string;
-    memberId: string;
-    email: string;
-    password: string;
-    passwordConfirm: string;
-    phone: string;
-    role: string;
-    description: string;
-  };
+  // 페이지가 소유한 RHF 폼 — 검증(zod)은 생성 클릭 시 handleSubmit이 수행하고 인라인 에러는 페이지가 표시한다
+  form: UseFormReturn<MemberCreateFormValues>;
 }
 
-export const CreateMemberAction = ({ formData }: CreateMemberActionProps) => {
+export const CreateMemberAction = ({ form }: CreateMemberActionProps) => {
   const navigate = useNavigate();
   const { createMember, isPending } = useCreateMember();
 
@@ -25,72 +20,22 @@ export const CreateMemberAction = ({ formData }: CreateMemberActionProps) => {
   const [isOpenResult, setIsOpenResult] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [resultNode, setResultNode] = useState<React.ReactNode>(null);
-  const [isOpenError, setIsOpenError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string>('');
 
-  // ✅ 검증
-  const handleSubmit = () => {
-    if (
-      !formData.name ||
-      !formData.memberId ||
-      !formData.email ||
-      !formData.password ||
-      !formData.phone
-    ) {
-      setErrorMessage('필수 항목을 입력해주세요.');
-      setIsOpenError(true);
-      return;
-    }
-    if (!/^[가-힣]+$/.test(formData.name)) {
-      setErrorMessage('이름은 한글만 입력 가능합니다.');
-      setIsOpenError(true);
-      return;
-    }
-    if (!/^[a-z0-9-]{5,45}$/.test(formData.memberId)) {
-      setErrorMessage("아이디는 소문자, 숫자, '-' 조합으로 5~45자여야 합니다.");
-      setIsOpenError(true);
-      return;
-    }
-    if (!/^[a-zA-Z0-9]+@[a-zA-Z]+(\.[a-zA-Z]+)+$/.test(formData.email)) {
-      setErrorMessage('이메일 형식이 올바르지 않습니다.');
-      setIsOpenError(true);
-      return;
-    }
-    if (
-      !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_\-+=])[A-Za-z\d!@#$%^&*()_\-+=]{8,16}$/.test(
-        formData.password
-      )
-    ) {
-      setErrorMessage('비밀번호는 8~16자, 영문 대/소문자·숫자·특수문자를 모두 포함해야 합니다.');
-      setIsOpenError(true);
-      return;
-    }
-    if (formData.password !== formData.passwordConfirm) {
-      setErrorMessage('비밀번호가 일치하지 않습니다.');
-      setIsOpenError(true);
-      return;
-    }
-    if (!/^\d{10,11}$/.test(formData.phone)) {
-      setErrorMessage('연락처는 숫자만 입력 가능하며 10~11자리여야 합니다.');
-      setIsOpenError(true);
-      return;
-    }
-
-    // ✅ 통과 시 확인 모달 열기
-    setIsOpenConfirm(true);
-  };
+  // 검증을 통과하면 확인 모달을 연다 — 실패하면 각 필드 옆에 에러가 표시된다
+  const handleSubmit = form.handleSubmit(() => setIsOpenConfirm(true));
 
   const handleClickConfirm = () => {
+    const values = form.getValues();
     const payload: CreateMemberRequest = {
-      name: formData.name,
-      member_id: formData.memberId,
-      email: formData.email,
-      phone: formData.phone,
-      role: formData.role,
+      name: values.name,
+      member_id: values.memberId,
+      email: values.email,
+      phone: values.phone,
+      role: values.role,
       is_active: true,
-      description: formData.description,
-      password: formData.password,
-      password_confirm: formData.passwordConfirm,
+      description: values.description,
+      password: values.password,
+      password_confirm: values.passwordConfirm,
     };
 
     createMember(payload, {
@@ -100,9 +45,11 @@ export const CreateMemberAction = ({ formData }: CreateMemberActionProps) => {
         setIsOpenConfirm(false);
         setIsOpenResult(true);
       },
-      onError: () => {
+      onError: (error) => {
         setIsSuccess(false);
-        setResultNode('회원 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        setResultNode(
+          getServerErrorMessage(error, '회원 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+        );
         setIsOpenConfirm(false);
         setIsOpenResult(true);
       },
@@ -116,7 +63,6 @@ export const CreateMemberAction = ({ formData }: CreateMemberActionProps) => {
 
   return (
     <>
-      {/* “생성” 버튼 → handleSubmit 실행 */}
       <Button size="large" color="primary" onClick={handleSubmit} disabled={isPending}>
         {isPending ? '처리 중...' : '생성'}
       </Button>
@@ -140,15 +86,6 @@ export const CreateMemberAction = ({ formData }: CreateMemberActionProps) => {
         onClickClose={handleCloseResult}
       >
         {resultNode}
-      </AlertDialog>
-      {/* 에러 모달 */}
-      <AlertDialog
-        isOpen={isOpenError}
-        confirmButtonText="확인"
-        onClickConfirm={() => setIsOpenError(false)}
-        onClickClose={() => setIsOpenError(false)}
-      >
-        {errorMessage}
       </AlertDialog>
     </>
   );
