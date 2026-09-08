@@ -1,563 +1,81 @@
 ---
 name: react-component
-description: React 컴포넌트를 생성하거나 리팩토링합니다. 재사용 가능한 UI 컴포넌트, 레이아웃 컴포넌트, 또는 복잡한 인터랙션이 필요한 컴포넌트를 만들 때 사용하세요. TypeScript, React Hooks, Tailwind CSS를 활용한 모던 React 개발 패턴을 따릅니다.
+description: React 컴포넌트를 생성하거나 리팩토링합니다. CRUD 모달 버튼, react-hook-form + zod 폼, 목록·상세 페이지 조각, 탭, 레이아웃 요소를 @innogrid/ui·Tailwind v4·SCSS 모듈로 이 프로젝트 패턴에 맞게 만들 때 사용하세요.
 ---
 
-# React Component Development Skill
+# React 컴포넌트
 
-React 18.3 + TypeScript 환경에서 재사용 가능하고 타입 안전한 컴포넌트를 개발합니다.
+React 18 + TypeScript strict. UI 킷은 사내 `@innogrid/ui`, 스타일은 Tailwind v4(`@tailwindcss/vite`)와 SCSS 모듈. 코드 예시는 기준 파일을 본다.
 
-## When to Use This Skill
+| 만들 것 | 기준 파일 |
+|---|---|
+| 생성/수정 모달 버튼 | `src/components/features/service/create-service-button.tsx`, `edit-service-button.tsx` |
+| 삭제 확인 버튼 | `src/components/features/dataset/delete-dataset-button.tsx` |
+| 전체 페이지 폼(파일 업로드·Select) | `src/components/features/dataset/dataset-form.tsx` |
+| 목록 페이지 / 상세 페이지 | `src/pages/service/page.tsx` / `src/pages/service/[id]/page.tsx` |
+| 상세 값 스켈레톤 | `src/components/ui/detail-value.tsx` |
+| 도메인 무관 UI(Radix 래퍼) | `src/components/ui/accordion.tsx`, `collapsible.tsx` |
+| 레이아웃 | `src/components/layout/header.tsx`(+ `header.module.scss`), `sidebar.tsx`, `menu.tsx`, `error-boundary.tsx` |
 
-- 새로운 재사용 가능한 UI 컴포넌트가 필요할 때 (버튼, 모달, 카드 등)
-- Feature 컴포넌트를 작성할 때 (생성/수정/삭제 버튼, 테이블 등)
-- Custom Hook을 구현할 때 (폼 상태, 검색, 페이지네이션 등)
-- 복잡한 상태 관리나 사이드 이펙트가 있는 컴포넌트를 만들 때
-- 기존 컴포넌트를 타입 안전하게 리팩토링할 때
+## 어디에 두나
 
-## 기술 스택
+- `src/components/features/<domain>/`: 도메인 컴포넌트. CRUD 버튼은 `create/edit/delete-<domain>-button.tsx`, 상세 탭은 `<x>-tab.tsx`, 폼은 `<domain>-form.tsx`.
+- `src/components/ui/`: 도메인 무관이고 **사용처가 2곳 이상**일 때만. 1곳이면 사용처 파일 안에 정의한다(예: 라우터의 `PageLoading`은 `router.tsx` 안).
+- `src/pages/<domain>/`: 라우트 컴포넌트만(`export default function XxxPage`). 로직은 훅·features로.
+- 파일명 kebab-case, 컴포넌트는 named export. 테스트는 같은 폴더 `.test.tsx`.
 
-- **React**: 18.3.1 (함수형 컴포넌트 + Hooks)
-- **TypeScript**: 5.8.3 (strict mode)
-- **스타일링**: Tailwind CSS 4.1.11 + SCSS
-- **UI 라이브러리**: @innogrid/ui v0.0.27
-- **상태 관리**: useState, useReducer, React Query
+## `@innogrid/ui` 먼저
 
-## 컴포넌트 카테고리
+직접 구현 전에 `node_modules/@innogrid/ui/dist/main.d.ts`의 export와 `src` 내 기존 사용처를 확인한다. 자주 쓰는 것: `Button`(`size`/`color`), `Modal`, `AlertDialog`, `Input`(`errMessage`), `Textarea`, `Select`, `FileDrop`, `Table` + `useTablePagination`/`useTableSelection`/`HeaderCheckbox`/`CellCheckbox`, `SearchInput` + `useSearchInputState`, `BreadCrumb`, `Tabs`, `DropdownMenu`(트리거를 children으로, `menus` 배열), `useToast`, 차트류.
 
-### 1. UI 컴포넌트 (src/components/ui/)
+- fixed 헤더(z-index 1) 위에 뜨는 `DropdownMenu`/팝오버 콘텐츠는 `zIndex={1000}`을 넘긴다. 기본값 `auto`는 가려진다.
+- 결함을 발견하면 `pnpm patch`로 막지 않는다. 이 앱에서 실제로 그 경로를 쓰는지 확인하고 업스트림(사내 UI팀)에 제보한다.
+- Radix 프리미티브는 `@innogrid/ui`에 없는 것(accordion, collapsible, popover)만 `src/components/ui/`에서 래핑해 쓴다.
 
-재사용 가능한 공통 UI 요소
+## 스타일링
 
-**예제: Accordion 컴포넌트**
+- Tailwind 유틸리티 우선. 조건부 결합은 `cn()`(`src/lib/utils.ts`, clsx + tailwind-merge). prettier-plugin-tailwindcss가 클래스 순서를 정리한다.
+- 페이지 골격은 전역 클래스(`src/assets/style/common/common.scss`): `breadcrumbBox`, `page-title-box`/`page-title`, `page-content`, `page-toolBox`/`page-toolBox-btns`, `page-detail-list-box`/`page-detail-list`, `page-input_item-name`(필수 `page-icon-requisite`)/`page-input_item-data`, `table-td-link`. 기존 페이지와 같은 구조를 유지한다.
+- 레이아웃이 복잡하면 `*.module.scss`. `variable`·`mixin`은 vite `additionalData`로 자동 주입되므로 `@use` 없이 바로 쓴다.
+- 색·간격 하드코딩보다 Tailwind 토큰. 캔버스 전용 CSS는 `src/components/ui/flow-chart.css`.
 
-```typescript
-import { useState } from 'react';
-import { ChevronDownIcon } from '@/assets/icons';
+## 폼
 
-interface AccordionProps {
-  title: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-}
+- `react-hook-form` + `zodResolver`. 스키마와 `type Schema = z.infer<typeof schema>`는 컴포넌트 파일 상단. 두 파일 이상이 공유할 때만 `<domain>-form.ts`로 뺀다(`member-form.ts`).
+- 텍스트 입력은 `{...register('name')}` + `errMessage={errors.name?.message}`. `Select`·`FileDrop` 같은 비네이티브 입력은 `Controller`.
+- `Textarea`는 `watch()` 값을 `value`로 넘기는 기존 패턴을 따른다(제어 컴포넌트).
+- 숫자 필드는 `type="number"`에 필드 단위의 `step`(학습률 0.01, weight decay 0.0001 같은 소수 필드는 필수)과 `min`.
+- 모달 폼은 닫을 때 `reset(defaultValues)`. 제출 중은 `isButtonLoading`/`buttonDisabled`.
+- 라벨 매핑(`DATASET_KIND_LABELS`)은 파일 상단 `Record<string, string>` 로컬 상수, 조회는 `LABELS[value] ?? value`.
 
-export function Accordion({ title, children, defaultOpen = false }: AccordionProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+## 상태·데이터
 
-  return (
-    <div className="border rounded-lg overflow-hidden">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
-        aria-expanded={isOpen}
-      >
-        <span className="font-medium">{title}</span>
-        <ChevronDownIcon
-          className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {isOpen && (
-        <div className="p-4">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-```
+- 서버 상태는 `src/hooks/service` 훅으로만. 컴포넌트에서 `api`를 직접 호출하지 않고, 서버 데이터를 zustand에 복제하지 않는다.
+- 로컬 UI 상태는 `useState`. zustand는 워크플로우 캔버스(`useWorkflowStore`) 전용.
+- 뮤테이션 결과 토스트는 컴포넌트 로컬 `useToast`. 성공 `title: '<대상> <동작> 성공'`, 실패 `children: getServerErrorMessage(error, '기본 문구')`. 전역 토스트 금지.
+- 쿼리 실패는 인라인으로(Table `emptyMessage`, 상세는 스켈레톤 유지 + 안내 문구). 페이지 진입 시 토스트 금지.
+- 인증은 `useAuth()`(`isAuthenticated`, `isAdmin`, `logout`). 관리자 전용 UI는 `isAdmin`으로 분기하고 라우트는 `AdminRoute`.
 
-**기존 UI 컴포넌트:**
-- `accordion.tsx`: 아코디언
-- `collapsible.tsx`: 접을 수 있는 컨테이너
-- `gauge-chart.tsx`: 게이지 차트
-- `flow-chart.tsx`: 플로우차트
-- `resizable.tsx`: 리사이즈 가능한 패널
+## 성능·접근성
 
-### 2. Feature 컴포넌트 (src/components/features/)
+- 페이지는 `router.tsx`에서 전부 `lazy`. 새 페이지도 같은 방식. 무거운 라이브러리(Monaco, xterm)는 그 컴포넌트 안에서만 import.
+- 목록 컬럼 정의는 모듈 스코프 상수, 파생 값은 `useMemo`. `React.memo`는 캔버스 노드처럼 리렌더가 실측된 곳에만.
+- 아이콘만 있는 버튼은 `aria-label` 또는 `sr-only` 텍스트. 토글 버튼은 `aria-pressed`. 삭제 같은 위험 동작은 `AlertDialog` 확인.
 
-특정 기능에 특화된 컴포넌트
+## 테스트
 
-**패턴: 모달 버튼 컴포넌트**
+- CRUD 버튼·폼: `import '@/test/mocks/innogrid-ui'`(경량 목, 사이드이펙트 import) + `render`/`renderWithUser`(`@/test/utils/test-utils`). 토스트는 `toastOpenSpy`.
+- Table·Select·SearchInput 실제 동작: 실제 `@innogrid/ui` 렌더 + `installDomMeasurementStubs()`. 목록 페이지는 `@/test/utils/list-page` 헬퍼.
+- `useNavigate` 검증은 `vi.mock('react-router', ...)` 부분 목(`delete-service-button.test.tsx`).
+- 접근성 스모크는 `vitest-axe`, 실제 렌더로만(`color-contrast` 제외).
+- 순수 함수는 컴포넌트 파일에서 `export`해 테스트한다. 테스트 목적으로 파일을 쪼개지 않는다. 부산물 `react-refresh/only-export-components` 경고는 용인된다.
 
-```typescript
-import { useState } from 'react';
-import { Button, Modal, ModalHeader, ModalContent, ModalFooter, Input } from '@innogrid/ui';
-import { useCreateResource } from '@/hooks/service/resources';
+## 체크리스트
 
-interface CreateResourceButtonProps {
-  onSuccess?: () => void;
-}
-
-export function CreateResourceButton({ onSuccess }: CreateResourceButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '' });
-
-  const { mutate, isPending } = useCreateResource();
-
-  const handleSubmit = () => {
-    mutate(formData, {
-      onSuccess: () => {
-        setIsOpen(false);
-        setFormData({ name: '', description: '' });
-        onSuccess?.();
-      },
-    });
-  };
-
-  return (
-    <>
-      <Button onClick={() => setIsOpen(true)}>리소스 생성</Button>
-
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)}>
-        <ModalHeader>새 리소스 생성</ModalHeader>
-
-        <ModalContent>
-          <div className="space-y-4">
-            <Input
-              label="이름"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="리소스 이름 입력"
-              required
-            />
-
-            <Input
-              label="설명"
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="설명 입력"
-            />
-          </div>
-        </ModalContent>
-
-        <ModalFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>
-            취소
-          </Button>
-          <Button onClick={handleSubmit} loading={isPending}>
-            생성
-          </Button>
-        </ModalFooter>
-      </Modal>
-    </>
-  );
-}
-```
-
-### 3. Layout 컴포넌트 (src/components/layout/)
-
-페이지 레이아웃 구조
-
-**기존 레이아웃:**
-- `header.tsx`: 헤더 (로고, 사용자 정보)
-- `sidebar.tsx`: 사이드바 (네비게이션 메뉴)
-- `menu.tsx`: 메뉴 아이템
-- `error-boundary.tsx`: 에러 경계
-
-## React Hooks 패턴
-
-### 1. useState - 로컬 상태 관리
-
-```typescript
-const [isOpen, setIsOpen] = useState(false);
-const [formData, setFormData] = useState<FormData>({ name: '', email: '' });
-```
-
-### 2. useEffect - 사이드 이펙트
-
-```typescript
-useEffect(() => {
-  // 컴포넌트 마운트 시 실행
-  const timer = setTimeout(() => {
-    setVisible(true);
-  }, 100);
-
-  // 클린업
-  return () => clearTimeout(timer);
-}, []); // 의존성 배열
-```
-
-### 3. useCallback - 함수 메모이제이션
-
-```typescript
-const handleSubmit = useCallback((data: FormData) => {
-  mutate(data);
-}, [mutate]);
-```
-
-### 4. useMemo - 값 메모이제이션
-
-```typescript
-const filteredData = useMemo(() => {
-  return data?.filter(item => item.status === 'active');
-}, [data]);
-```
-
-### 5. useRef - DOM 참조 및 값 저장
-
-```typescript
-const inputRef = useRef<HTMLInputElement>(null);
-
-const focusInput = () => {
-  inputRef.current?.focus();
-};
-```
-
-### 6. Custom Hooks
-
-```typescript
-// src/hooks/use-search-input-state.ts
-export function useSearchInputState() {
-  const [value, setValue] = useState('');
-  const [debouncedValue, setDebouncedValue] = useState('');
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedValue(value);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [value]);
-
-  return {
-    value,
-    setValue,
-    debouncedValue,
-  };
-}
-```
-
-## TypeScript 타입 정의
-
-### Props 인터페이스
-
-```typescript
-interface ButtonProps {
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
-  disabled?: boolean;
-  loading?: boolean;
-  className?: string;
-}
-
-export function Button({
-  children,
-  onClick,
-  variant = 'primary',
-  size = 'md',
-  disabled = false,
-  loading = false,
-  className,
-}: ButtonProps) {
-  // ...
-}
-```
-
-### Generic 컴포넌트
-
-```typescript
-interface ListProps<T> {
-  items: T[];
-  renderItem: (item: T) => React.ReactNode;
-  keyExtractor: (item: T) => string;
-}
-
-export function List<T>({ items, renderItem, keyExtractor }: ListProps<T>) {
-  return (
-    <ul>
-      {items.map((item) => (
-        <li key={keyExtractor(item)}>{renderItem(item)}</li>
-      ))}
-    </ul>
-  );
-}
-```
-
-## 스타일링 패턴
-
-### Tailwind CSS 유틸리티
-
-```typescript
-export function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-      {children}
-    </div>
-  );
-}
-```
-
-### 조건부 클래스
-
-```typescript
-import { clsx } from 'clsx';
-
-export function Badge({ type }: { type: 'success' | 'error' | 'warning' }) {
-  return (
-    <span
-      className={clsx(
-        'px-2 py-1 rounded-full text-xs font-medium',
-        type === 'success' && 'bg-green-100 text-green-800',
-        type === 'error' && 'bg-red-100 text-red-800',
-        type === 'warning' && 'bg-yellow-100 text-yellow-800'
-      )}
-    >
-      {type}
-    </span>
-  );
-}
-```
-
-### SCSS 모듈 (복잡한 스타일)
-
-```typescript
-import styles from './component.module.scss';
-
-export function ComplexComponent() {
-  return (
-    <div className={styles.container}>
-      <div className={styles.header}>Header</div>
-      <div className={styles.content}>Content</div>
-    </div>
-  );
-}
-```
-
-```scss
-// component.module.scss
-.container {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  height: 100vh;
-
-  .header {
-    padding: 1rem;
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  .content {
-    overflow-y: auto;
-    padding: 1rem;
-  }
-}
-```
-
-## 성능 최적화
-
-### 1. React.memo - 불필요한 리렌더링 방지
-
-```typescript
-export const ExpensiveComponent = React.memo(function ExpensiveComponent({
-  data,
-}: {
-  data: ComplexData;
-}) {
-  // 복잡한 렌더링 로직
-  return <div>{/* ... */}</div>;
-});
-```
-
-### 2. Code Splitting - 지연 로딩
-
-```typescript
-import { lazy, Suspense } from 'react';
-
-const HeavyComponent = lazy(() => import('./HeavyComponent'));
-
-export function Parent() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <HeavyComponent />
-    </Suspense>
-  );
-}
-```
-
-### 3. 가상화 - 긴 리스트 최적화
-
-```typescript
-import { useVirtualizer } from '@tanstack/react-virtual';
-
-export function VirtualList({ items }: { items: Item[] }) {
-  const parentRef = useRef<HTMLDivElement>(null);
-
-  const virtualizer = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 50,
-  });
-
-  return (
-    <div ref={parentRef} className="h-[500px] overflow-auto">
-      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
-        {virtualizer.getVirtualItems().map((virtualItem) => (
-          <div
-            key={virtualItem.key}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: `${virtualItem.size}px`,
-              transform: `translateY(${virtualItem.start}px)`,
-            }}
-          >
-            {items[virtualItem.index].name}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-```
-
-## 접근성 (a11y)
-
-### 시맨틱 HTML
-
-```typescript
-export function Article({ title, content }: { title: string; content: string }) {
-  return (
-    <article>
-      <header>
-        <h1>{title}</h1>
-      </header>
-      <main>
-        <p>{content}</p>
-      </main>
-    </article>
-  );
-}
-```
-
-### ARIA 속성
-
-```typescript
-export function ExpandableSection({ title, children }: Props) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <div>
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        aria-expanded={isExpanded}
-        aria-controls="content"
-      >
-        {title}
-      </button>
-      <div id="content" role="region" hidden={!isExpanded}>
-        {children}
-      </div>
-    </div>
-  );
-}
-```
-
-### 키보드 네비게이션
-
-```typescript
-export function Menu({ items }: { items: MenuItem[] }) {
-  const [focusedIndex, setFocusedIndex] = useState(0);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      setFocusedIndex((prev) => Math.min(prev + 1, items.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      setFocusedIndex((prev) => Math.max(prev - 1, 0));
-    }
-  };
-
-  return (
-    <ul role="menu" onKeyDown={handleKeyDown}>
-      {items.map((item, index) => (
-        <li
-          key={item.id}
-          role="menuitem"
-          tabIndex={index === focusedIndex ? 0 : -1}
-        >
-          {item.label}
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
-
-## 에러 처리
-
-### Error Boundary
-
-```typescript
-import { Component, ErrorInfo, ReactNode } from 'react';
-
-interface Props {
-  children: ReactNode;
-  fallback?: ReactNode;
-}
-
-interface State {
-  hasError: boolean;
-  error?: Error;
-}
-
-export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false };
-
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback || <div>Something went wrong.</div>;
-    }
-
-    return this.props.children;
-  }
-}
-```
-
-## 테스트 (향후 추가 예정)
-
-```typescript
-// feature.test.tsx (예제)
-import { render, screen, fireEvent } from '@testing-library/react';
-import { CreateResourceButton } from './create-resource-button';
-
-describe('CreateResourceButton', () => {
-  it('opens modal when clicked', () => {
-    render(<CreateResourceButton />);
-
-    const button = screen.getByText('리소스 생성');
-    fireEvent.click(button);
-
-    expect(screen.getByText('새 리소스 생성')).toBeInTheDocument();
-  });
-});
-```
-
-## 개발 체크리스트
-
-- [ ] TypeScript 인터페이스 정의
-- [ ] Props 타입 정의 (필수/선택 구분)
-- [ ] 기본값 설정
-- [ ] 접근성 속성 추가 (ARIA)
-- [ ] 반응형 디자인 적용
-- [ ] 에러 상태 처리
-- [ ] 로딩 상태 표시
-- [ ] 키보드 네비게이션 지원
-- [ ] 재사용성 고려
-- [ ] 성능 최적화 (필요시)
-
-## 명명 규칙
-
-- **컴포넌트**: PascalCase (예: `CreateButton`)
-- **Props 인터페이스**: `ComponentNameProps`
-- **파일명**: kebab-case (예: `create-button.tsx`)
-- **Custom Hook**: `use` 접두사 (예: `useFormState`)
+- [ ] `@innogrid/ui`에 있는 것을 직접 만들지 않았다
+- [ ] 사용처 1곳인 코드는 인라인, `src/types`에 런타임 값 없음
+- [ ] 서버 상태는 훅, 토스트는 로컬, 실패 본문 `getServerErrorMessage`
+- [ ] 숫자 `Input`에 `step`·`min`
+- [ ] 테스트 동반, 경량 목 import 누락 없음
+- [ ] `infra-management` 영역은 건드리지 않았다
+- [ ] `pnpm typecheck` → `pnpm lint` → 관련 테스트 통과
