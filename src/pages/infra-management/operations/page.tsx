@@ -9,7 +9,7 @@ import {
   useTableSelection,
 } from '@innogrid/ui';
 import { useGetOperations } from '@/hooks/service/operations';
-import { OperationProgress } from '@/components/features/infra-managememt/operation-progress';
+import { OperationProgress } from '@/components/features/infra-management/operation-progress';
 import { formatDateTime } from '@/util/date';
 import type { Operation, OperationState } from '@/types/cluster';
 

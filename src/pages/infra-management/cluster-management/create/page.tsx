@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { BreadCrumb, Button, Input, useToast } from '@innogrid/ui';
 import { useNavigate } from 'react-router';
 import { useCreateCluster } from '@/hooks/service/clusters';
-import { ClusterBootstrapModal } from '@/components/features/infra-managememt/cluster-management/cluster-bootstrap-modal';
+import { ClusterBootstrapModal } from '@/components/features/infra-management/cluster-management/cluster-bootstrap-modal';
 import type { BootstrapInfo, ClusterRegistrationResponse } from '@/types/cluster';
 
 // Manual register 는 "본인이 운영하는 K8s cluster" — provider / clusterType 정보는 운영상 무의미.

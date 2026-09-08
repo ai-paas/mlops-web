@@ -1,44 +1,44 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { BreadCrumb, Button, Select, type SelectSingleValue } from '@innogrid/ui';
-import { EditClusterButton } from '@/components/features/infra-managememt/cluster-management/edit-cluster-button';
-import { DeleteClusterButton } from '@/components/features/infra-managememt/cluster-management/delete-cluster-button';
+import { EditClusterButton } from '@/components/features/infra-management/cluster-management/edit-cluster-button';
+import { DeleteClusterButton } from '@/components/features/infra-management/cluster-management/delete-cluster-button';
 import {
   useGetCluster,
   useGetKubernetesNamespaces,
   useFetchClusterBootstrap,
 } from '@/hooks/service/clusters';
 import { formatDateTime } from '@/util/date';
-import { ClusterBootstrapModal } from '@/components/features/infra-managememt/cluster-management/cluster-bootstrap-modal';
-import { KubeconfigDownloadModal } from '@/components/features/infra-managememt/cluster-management/kubeconfig-download-modal';
+import { ClusterBootstrapModal } from '@/components/features/infra-management/cluster-management/cluster-bootstrap-modal';
+import { KubeconfigDownloadModal } from '@/components/features/infra-management/cluster-management/kubeconfig-download-modal';
 import type { BootstrapInfo } from '@/types/cluster';
 
 type NamespaceOption = { label: string; value: string };
 const ALL_NAMESPACES: NamespaceOption = { label: '전체 네임스페이스', value: '' };
 
 // 쿠버네티스 리소스 탭 컴포넌트들
-import { NodesTab } from '@/components/features/infra-managememt/cluster-management/tabs/nodes-tab';
-import { NamespacesTab } from '@/components/features/infra-managememt/cluster-management/tabs/namespaces-tab';
-import { DeploymentsTab } from '@/components/features/infra-managememt/cluster-management/tabs/deployments-tab';
-import { ReplicaSetsTab } from '@/components/features/infra-managememt/cluster-management/tabs/replica-sets-tab';
-import { PodsTab } from '@/components/features/infra-managememt/cluster-management/tabs/pods-tab';
-import { ServicesTab } from '@/components/features/infra-managememt/cluster-management/tabs/services-tab';
-import { DaemonSetsTab } from '@/components/features/infra-managememt/cluster-management/tabs/daemon-sets-tab';
-import { GpuSchedulingTab } from '@/components/features/infra-managememt/cluster-management/tabs/gpu-scheduling-tab';
-import { ServiceAccountsTab } from '@/components/features/infra-managememt/cluster-management/tabs/service-accounts-tab';
-import { ConfigMapsTab } from '@/components/features/infra-managememt/cluster-management/tabs/config-maps-tab';
-import { SecretsTab } from '@/components/features/infra-managememt/cluster-management/tabs/secrets-tab';
-import { OperationsTab } from '@/components/features/infra-managememt/cluster-management/tabs/operations-tab';
-import { ClusterHealthPill } from '@/components/features/infra-managememt/cluster-health-pill';
-import { LiveProgress } from '@/components/features/infra-managememt/provisioning/live-progress';
-import { YamlResourceEditor } from '@/components/features/infra-managememt/yaml-resource-editor';
-import { ResourceNavigationRail } from '@/components/features/infra-managememt/cluster-management/resource-navigation-rail';
+import { NodesTab } from '@/components/features/infra-management/cluster-management/tabs/nodes-tab';
+import { NamespacesTab } from '@/components/features/infra-management/cluster-management/tabs/namespaces-tab';
+import { DeploymentsTab } from '@/components/features/infra-management/cluster-management/tabs/deployments-tab';
+import { ReplicaSetsTab } from '@/components/features/infra-management/cluster-management/tabs/replica-sets-tab';
+import { PodsTab } from '@/components/features/infra-management/cluster-management/tabs/pods-tab';
+import { ServicesTab } from '@/components/features/infra-management/cluster-management/tabs/services-tab';
+import { DaemonSetsTab } from '@/components/features/infra-management/cluster-management/tabs/daemon-sets-tab';
+import { GpuSchedulingTab } from '@/components/features/infra-management/cluster-management/tabs/gpu-scheduling-tab';
+import { ServiceAccountsTab } from '@/components/features/infra-management/cluster-management/tabs/service-accounts-tab';
+import { ConfigMapsTab } from '@/components/features/infra-management/cluster-management/tabs/config-maps-tab';
+import { SecretsTab } from '@/components/features/infra-management/cluster-management/tabs/secrets-tab';
+import { OperationsTab } from '@/components/features/infra-management/cluster-management/tabs/operations-tab';
+import { ClusterHealthPill } from '@/components/features/infra-management/cluster-health-pill';
+import { LiveProgress } from '@/components/features/infra-management/provisioning/live-progress';
+import { YamlResourceEditor } from '@/components/features/infra-management/yaml-resource-editor';
+import { ResourceNavigationRail } from '@/components/features/infra-management/cluster-management/resource-navigation-rail';
 import {
   RESOURCE_BY_ID,
   DEFAULT_RESOURCE,
   type ResourceId,
-} from '@/components/features/infra-managememt/cluster-management/resource-meta';
-import { buildResourceSkeleton } from '@/components/features/infra-managememt/cluster-management/resource-skeletons';
+} from '@/components/features/infra-management/cluster-management/resource-meta';
+import { buildResourceSkeleton } from '@/components/features/infra-management/cluster-management/resource-skeletons';
 import { DetailValue } from '@/components/ui/detail-value';
 
 export default function ClusterDetailPage() {

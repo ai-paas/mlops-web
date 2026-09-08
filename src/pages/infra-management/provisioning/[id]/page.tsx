@@ -12,8 +12,8 @@ import {
 } from '@/hooks/service/vms';
 import { formatDateTime } from '@/util/date';
 import type { VmNode } from '@/types/vm';
-import { WorkflowStepper } from '@/components/features/infra-managememt/provisioning/workflow-stepper';
-import { LiveProgress } from '@/components/features/infra-managememt/provisioning/live-progress';
+import { WorkflowStepper } from '@/components/features/infra-management/provisioning/workflow-stepper';
+import { LiveProgress } from '@/components/features/infra-management/provisioning/live-progress';
 import { DetailValue } from '@/components/ui/detail-value';
 
 const stateColor = (status?: string): 'run' | 'negative' | 'wait' => {

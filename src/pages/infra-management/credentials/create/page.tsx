@@ -6,7 +6,7 @@ import {
   CSP_OPTIONS,
   CSP_PLACEHOLDERS,
   CspSelector,
-} from '@/components/features/infra-managememt/credentials/csp-selector';
+} from '@/components/features/infra-management/credentials/csp-selector';
 
 const extractErrorMessage = (error: unknown, fallback: string) => {
   if (error && typeof error === 'object' && 'message' in error) {
