@@ -399,7 +399,7 @@ const Step2 = ({ form }: StepProps) => {
   const { searchMethods } = useGetSearchMethods();
   const { modelTypes } = useGetModelTypes({ type_name: 'Embedding' });
   const { models } = useGetModels(
-    { page: 1, size: 999, model_type_id: modelTypes[0]?.id },
+    { page: 1, size: 100, model_type_id: modelTypes[0]?.id },
     { enabled: !!modelTypes.length }
   );
   const verifiedModels = models.filter((model) =>
@@ -559,7 +559,7 @@ const Step2 = ({ form }: StepProps) => {
                     value={
                       verifiedModels.find((model: Model) => model.id === field.value.id) ?? null
                     }
-                    isDisabled={verifiedModels.length <= 1}
+                    isDisabled={verifiedModels.length === 0}
                     isError={!!fieldState.error}
                     errMessage={fieldState.error?.message}
                     onChange={(option: Model | null) => {
