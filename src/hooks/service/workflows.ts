@@ -537,6 +537,12 @@ export const useUpdateComponentDeployStatus = () => {
   };
 };
 
+// 워크플로우 테스트 요청 타임아웃. 백엔드가 150초 상한으로 판정하고 그 결과를 응답 본문
+// (results[].error)에 담아 주므로, 프론트가 먼저 끊으면 실패 원인을 잃는다. 여유를 둬
+// 서버 판정이 항상 먼저 도착하게 하고, 이 값은 서버 무응답에 대한 안전망으로만 쓴다.
+// (ky 기본 30초로는 KB 검색 + 생성이 걸리는 워크플로우에서 응답을 받지 못한다)
+const TEST_REQUEST_TIMEOUT = 180_000;
+
 export const useTestRagWorkflow = () => {
   const { mutate, isPending, isError, error, isSuccess, data } = useMutation({
     mutationFn: (params: { surro_workflow_id: string; text: string }) => {
@@ -546,6 +552,7 @@ export const useTestRagWorkflow = () => {
         .post(`workflows/${params.surro_workflow_id}/test/rag`, {
           body,
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          timeout: TEST_REQUEST_TIMEOUT,
         })
         .json<WorkflowRagTestResponse>();
     },
@@ -591,7 +598,10 @@ export const useTestProteinClassificationWorkflow = () => {
       ...json
     }: { surro_workflow_id: string } & WorkflowProteinClassificationTestRequest) =>
       api
-        .post(`workflows/${surro_workflow_id}/test/protein-classification`, { json })
+        .post(`workflows/${surro_workflow_id}/test/protein-classification`, {
+          json,
+          timeout: TEST_REQUEST_TIMEOUT,
+        })
         .json<WorkflowProteinClassificationTestResponse>(),
   });
   return {
@@ -611,7 +621,10 @@ export const useTestFillMaskWorkflow = () => {
       ...json
     }: { surro_workflow_id: string } & WorkflowFillMaskTestRequest) =>
       api
-        .post(`workflows/${surro_workflow_id}/test/fill-mask`, { json })
+        .post(`workflows/${surro_workflow_id}/test/fill-mask`, {
+          json,
+          timeout: TEST_REQUEST_TIMEOUT,
+        })
         .json<WorkflowFillMaskTestResponse>(),
   });
   return {
@@ -631,7 +644,10 @@ export const useTestProteinStructurePredictionWorkflow = () => {
       ...json
     }: { surro_workflow_id: string } & WorkflowProteinStructurePredictionTestRequest) =>
       api
-        .post(`workflows/${surro_workflow_id}/test/protein-structure-prediction`, { json })
+        .post(`workflows/${surro_workflow_id}/test/protein-structure-prediction`, {
+          json,
+          timeout: TEST_REQUEST_TIMEOUT,
+        })
         .json<WorkflowProteinStructurePredictionTestResponse>(),
   });
   return {
@@ -669,7 +685,6 @@ export const useCleanupWorkflow = () => {
  * finalize-deletion과 같은 probe API라 파라미터·예외 처리를 공유한다(위 공용 상수 참고).
  * status가 'in_progress'인 동안 5초 간격으로 재호출하고,
  * 종결값('completed'/'failed') / 404 / 10분 상한 중 하나에 걸리면 멈춘다.
- * [백엔드] 상태 조회용 GET 전환은 협의 항목(TODO 14).
  */
 export const useFinalizeWorkflowCleanup = (params: {
   surro_workflow_id?: string;

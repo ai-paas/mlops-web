@@ -112,6 +112,27 @@ export const workflowHandlers = [
     })
   ),
 
+  // POST /workflows/:surro_workflow_id/test/rag - 텍스트 생성 테스트 (기본: 성공)
+  // MLOps는 실패도 200 + results[].error로 반환한다 — 실패 케이스는 각 테스트에서 덮어쓴다.
+  http.post(`${BASE_URL}/workflows/:surro_workflow_id/test/rag`, ({ params }) =>
+    HttpResponse.json({
+      workflow_id: params.surro_workflow_id as string,
+      execution_order: ['comp-llm'],
+      results: [
+        {
+          component_id: 'comp-llm',
+          component_name: '모델',
+          component_type: 'MODEL',
+          model_type: 'LLM',
+          task: null,
+          result: { response: '안녕하세요. 무엇을 도와드릴까요?' },
+          error: null,
+        },
+      ],
+      final_result: '안녕하세요. 무엇을 도와드릴까요?',
+    })
+  ),
+
   // GET /workflows/:surro_workflow_id/status - 배포 상태 (기본: 배포 완료 모델 1개)
   http.get(`${BASE_URL}/workflows/:surro_workflow_id/status`, ({ params }) =>
     HttpResponse.json({
