@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { HTTPError, TimeoutError, type NormalizedOptions } from 'ky';
 import { QueryClient, onlineManager } from '@tanstack/react-query';
 import { server } from '@/test/mocks/server';
@@ -12,6 +12,8 @@ import {
   isFinalizeDeletionSucceeded,
   useFinalizeWorkflowCleanup,
   useFinalizeWorkflowDeletion,
+  useTestProteinStructurePredictionWorkflow,
+  useTestRagWorkflow,
   useGetTemplates,
   useGetWorkflow,
   useGetWorkflowStatus,
@@ -808,6 +810,118 @@ describe('workflows hooks', () => {
       [undefined, false],
     ])('status %s → %s', (status, expected) => {
       expect(isFinalizeDeletionSucceeded(status as string | undefined)).toBe(expected);
+    });
+  });
+
+  // ============================================
+  // 워크플로우 테스트 요청 타임아웃 — 백엔드가 150초까지 붙잡고 판정 결과를 본문에 담아 주므로
+  // ky 기본 30초로 먼저 끊으면 실패 원인(results[].error)을 잃는다.
+  // ============================================
+  describe('테스트 요청 타임아웃', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('RAG 테스트는 30초를 넘겨 도착한 응답도 받는다', async () => {
+      server.use(
+        http.post(`${BASE_URL}/workflows/:id/test/rag`, async () => {
+          await delay(140_000);
+          return HttpResponse.json({
+            workflow_id: 'wf-1',
+            execution_order: ['comp-llm'],
+            results: [
+              {
+                component_id: 'comp-llm',
+                component_name: '모델',
+                component_type: 'MODEL',
+                model_type: 'LLM',
+                error: 'All connection attempts failed',
+              },
+            ],
+            final_result: null,
+          });
+        })
+      );
+
+      const { result } = renderHook(() => useTestRagWorkflow(), {
+        wrapper: createHookWrapper(createTestQueryClient()),
+      });
+
+      act(() => {
+        result.current.testRagWorkflow({ surro_workflow_id: 'wf-1', text: '안녕' });
+      });
+
+      // 기본 30초였다면 여기서 TimeoutError로 끝난다
+      await advance(60_000);
+      expect(result.current.isError).toBe(false);
+
+      await advance(100_000);
+      expect(result.current.isError).toBe(false);
+      expect(result.current.testResult?.results[0].error).toBe('All connection attempts failed');
+    });
+
+    it('단백질 구조 예측도 30초를 넘겨 도착한 응답을 받는다', async () => {
+      server.use(
+        http.post(`${BASE_URL}/workflows/:id/test/protein-structure-prediction`, async () => {
+          await delay(140_000);
+          return HttpResponse.json({
+            workflow_id: 'wf-1',
+            execution_order: ['comp-bfm'],
+            results: [
+              {
+                component_id: 'comp-bfm',
+                component_name: '구조 예측 모델',
+                component_type: 'MODEL',
+                model_type: 'BFM',
+                task: 'protein-structure-prediction',
+                result: { pdb: 'ATOM ...' },
+                error: null,
+              },
+            ],
+          });
+        })
+      );
+
+      const { result } = renderHook(() => useTestProteinStructurePredictionWorkflow(), {
+        wrapper: createHookWrapper(createTestQueryClient()),
+      });
+
+      act(() => {
+        result.current.testProteinStructurePredictionWorkflow({
+          surro_workflow_id: 'wf-1',
+          sequence: 'MKTV',
+          num_loops: 3,
+          num_sampling_steps: 50,
+        });
+      });
+
+      await advance(160_000);
+      expect(result.current.isError).toBe(false);
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    it('상한(180초)을 넘으면 타임아웃 에러로 끝낸다', async () => {
+      server.use(
+        http.post(`${BASE_URL}/workflows/:id/test/rag`, async () => {
+          await delay(200_000);
+          return HttpResponse.json({ workflow_id: 'wf-1', results: [], final_result: null });
+        })
+      );
+
+      const { result } = renderHook(() => useTestRagWorkflow(), {
+        wrapper: createHookWrapper(createTestQueryClient()),
+      });
+
+      act(() => {
+        result.current.testRagWorkflow({ surro_workflow_id: 'wf-1', text: '안녕' });
+      });
+
+      await advance(190_000);
+      expect(result.current.isError).toBe(true);
+      expect(result.current.error).toBeInstanceOf(TimeoutError);
     });
   });
 
