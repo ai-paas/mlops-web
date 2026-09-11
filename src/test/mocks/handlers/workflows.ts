@@ -87,6 +87,31 @@ export const workflowHandlers = [
     () => new HttpResponse(null, { status: 204 })
   ),
 
+  // DELETE /workflows/:surro_workflow_id - 삭제 시작 (완료가 아니라 정리 시작이다. 실서버는 202)
+  http.delete(`${BASE_URL}/workflows/:surro_workflow_id`, ({ params }) =>
+    HttpResponse.json(
+      {
+        message: 'deletion started',
+        workflow_id: params.surro_workflow_id as string,
+        cleanup_run_id: 'run-001',
+        status: 'cleanup_in_progress',
+        next_step: 'finalize-deletion',
+      },
+      { status: 202 }
+    )
+  ),
+
+  // POST /workflows/:surro_workflow_id/finalize-deletion - 삭제 완료 확인 probe
+  // 기본은 즉시 completed. status는 in_progress/completed/failed 3개뿐이다.
+  http.post(`${BASE_URL}/workflows/:surro_workflow_id/finalize-deletion`, ({ params }) =>
+    HttpResponse.json({
+      message: 'deletion completed',
+      workflow_id: params.surro_workflow_id as string,
+      status: 'completed',
+      deleted_from_db: true,
+    })
+  ),
+
   // GET /workflows/:surro_workflow_id/status - 배포 상태 (기본: 배포 완료 모델 1개)
   http.get(`${BASE_URL}/workflows/:surro_workflow_id/status`, ({ params }) =>
     HttpResponse.json({

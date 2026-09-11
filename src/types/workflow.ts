@@ -226,14 +226,18 @@ export interface DeleteWorkflowResponse {
 
 export interface FinalizeWorkflowDeletionResponse {
   message?: string;
+  error_message?: string;
   workflow_id?: string;
-  status?: string;
+  status?: 'in_progress' | 'completed' | 'failed' | string;
+  deleted_from_db?: boolean;
 }
 
 export interface FinalizeWorkflowCleanupResponse {
   message?: string;
+  error_message?: string;
   workflow_id?: string;
-  status?: 'completed' | 'in_progress' | 'failed' | string;
+  status?: 'in_progress' | 'completed' | 'failed' | string;
+  // cleanup은 워크플로우가 남는다 — true면 ERROR → DRAFT로 전환됐다는 뜻
   workflow_updated?: boolean;
 }
 

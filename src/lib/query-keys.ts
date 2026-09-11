@@ -197,6 +197,8 @@ export const queryKeys = {
     models: (workflowId?: string) => [...queryKeys.workflows.all, 'models', workflowId] as const,
     finalizeCleanup: (workflowId?: string) =>
       [...queryKeys.workflows.all, 'finalize-cleanup', workflowId] as const,
+    finalizeDeletion: (workflowId?: string) =>
+      [...queryKeys.workflows.all, 'finalize-deletion', workflowId] as const,
   },
   // ============= 인프라(any-cloud) 도메인 =============
   clusters: {
