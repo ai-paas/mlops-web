@@ -1,6 +1,16 @@
 import { useAddFileToKnowledgeBase } from '@/hooks/service/knowledgebase';
+import { getServerErrorMessage } from '@/lib/api';
 import { Button, FileDrop, Modal, useToast } from '@innogrid/ui';
 import { useCallback, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const fileFormSchema = z.object({
+  files: z.array(z.instanceof(File)).min(1, '업로드할 파일을 추가해주세요.'),
+});
+
+type FileFormValues = z.infer<typeof fileFormSchema>;
 
 export const CreateKnowledgeBaseFileButton = ({
   knowledgeBaseId,
@@ -8,9 +18,19 @@ export const CreateKnowledgeBaseFileButton = ({
   knowledgeBaseId?: number;
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
   const { addFileAsync, isPending } = useAddFileToKnowledgeBase(knowledgeBaseId ?? 0);
   const toast = useToast();
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<FileFormValues>({
+    resolver: zodResolver(fileFormSchema),
+    defaultValues: { files: [] },
+  });
+  const files = useWatch({ control, name: 'files' });
 
   const openModal = useCallback(() => {
     if (!knowledgeBaseId) return;
@@ -19,22 +39,26 @@ export const CreateKnowledgeBaseFileButton = ({
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false);
-    setFiles([]);
-  }, []);
+    reset();
+  }, [reset]);
 
   const handleAddFile = (added: File[]) => {
-    setFiles((prev) => [...prev, ...added]);
+    // 파일이 추가되면 '파일 없음' 에러도 함께 지운다
+    setValue('files', [...files, ...added], { shouldValidate: true });
   };
 
   const handleDeleteFile = ({ fileIndex }: { file: File; fileIndex: number }) => {
-    setFiles((prev) => prev.filter((_, index) => index !== fileIndex));
+    setValue(
+      'files',
+      files.filter((_, index) => index !== fileIndex)
+    );
   };
 
-  const handleSubmit = async () => {
-    if (!knowledgeBaseId || files.length === 0) return;
+  const onValid = async (values: FileFormValues) => {
+    if (!knowledgeBaseId) return;
 
     try {
-      for (const file of files) {
+      for (const file of values.files) {
         await addFileAsync({ file });
       }
       toast.open({
@@ -43,11 +67,14 @@ export const CreateKnowledgeBaseFileButton = ({
         children: '파일이 성공적으로 생성되었습니다.',
       });
       closeModal();
-    } catch {
+    } catch (error) {
       toast.open({
         status: 'negative',
         title: '파일 생성 실패',
-        children: '파일 생성 중 오류가 발생했습니다. 다시 시도하면 파일이 다시 업로드됩니다.',
+        children: getServerErrorMessage(
+          error,
+          '파일 생성 중 오류가 발생했습니다. 다시 시도하면 파일이 다시 업로드됩니다.'
+        ),
       });
     }
   };
@@ -61,14 +88,15 @@ export const CreateKnowledgeBaseFileButton = ({
         allowOutsideInteraction
         isOpen={isModalOpen}
         isButtonLoading={isPending}
-        buttonDisabled={isPending || files.length === 0}
+        // 파일이 없을 때는 버튼을 잠그는 대신 스키마(min 1)가 제출 시 인라인으로 안내한다
+        buttonDisabled={isPending}
         size="small"
         title="파일 생성"
         buttonTitle="확인"
         onRequestClose={() => {
           if (!isPending) closeModal();
         }}
-        action={handleSubmit}
+        action={handleSubmit(onValid)}
         subButton={
           <Button size="large" color="secondary" disabled={isPending} onClick={closeModal}>
             취소
@@ -101,6 +129,11 @@ export const CreateKnowledgeBaseFileButton = ({
                     })
                   }
                 />
+                {errors.files?.message && (
+                  <p className="mt-1 text-xs leading-normal tracking-[-0.5px] text-[#dc4646]">
+                    {errors.files.message}
+                  </p>
+                )}
                 <p className="mt-2 text-xs leading-5 text-[#667085]">
                   대용량 파일은 업로드·임베딩에 수 분 이상 걸릴 수 있습니다.
                 </p>

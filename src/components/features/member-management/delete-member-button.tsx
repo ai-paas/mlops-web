@@ -1,6 +1,7 @@
 import { AlertDialog, Button } from '@innogrid/ui';
 import { useState } from 'react';
 import { useDeleteMember } from '@/hooks/service/member';
+import { getServerErrorMessage } from '@/lib/api';
 
 interface DeleteMemberButtonProps {
   selectedMemberId?: string | null;
@@ -27,8 +28,8 @@ export const DeleteMemberButton = ({ selectedMemberId }: DeleteMemberButtonProps
         setIsOpenConfirm(false);
         setIsOpenResult(true);
       },
-      onError: () => {
-        setResultMessage(`${selectedMemberId} 삭제에 실패했습니다.`);
+      onError: (error) => {
+        setResultMessage(getServerErrorMessage(error, `${selectedMemberId} 삭제에 실패했습니다.`));
         setIsOpenConfirm(false);
         setIsOpenResult(true);
       },

@@ -1,23 +1,18 @@
 import { AlertDialog, Button } from '@innogrid/ui';
 import { useState } from 'react';
+import type { UseFormReturn } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import { useUpdateMember } from '@/hooks/service/member';
+import { getServerErrorMessage } from '@/lib/api';
 import type { UpdateMemberPayload } from '@/types/member';
+import type { MemberEditFormValues } from './member-form';
 
 interface EditMemberActionProps {
-  formData: {
-    name: string;
-    memberId: string;
-    email: string;
-    password: string;
-    passwordConfirm: string;
-    phone: string;
-    role: string;
-    description: string;
-  };
+  // 페이지가 소유한 RHF 폼 — 검증(zod)은 수정 클릭 시 handleSubmit이 수행하고 인라인 에러는 페이지가 표시한다
+  form: UseFormReturn<MemberEditFormValues>;
 }
 
-export const EditMemberAction = ({ formData }: EditMemberActionProps) => {
+export const EditMemberAction = ({ form }: EditMemberActionProps) => {
   const navigate = useNavigate();
   const { updateMember, isPending } = useUpdateMember();
 
@@ -26,72 +21,22 @@ export const EditMemberAction = ({ formData }: EditMemberActionProps) => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [resultNode, setResultNode] = useState<React.ReactNode>(null);
 
-  const [, setErrors] = useState({
-    name: '',
-    memberId: '',
-    email: '',
-    password: '',
-    passwordConfirm: '',
-    phone: '',
-  });
+  // 검증을 통과하면 확인 모달을 연다 — 실패하면 각 필드 옆에 에러가 표시된다
+  const handleSubmit = form.handleSubmit(() => setIsOpenConfirm(true));
 
-  // 검증
-  const handleSubmit = () => {
-    const newErrors = {
-      name: '',
-      memberId: '',
-      email: '',
-      password: '',
-      passwordConfirm: '',
-      phone: '',
-    };
-
-    if (!formData.email || !formData.phone) {
-      newErrors.name = '필수 항목을 입력해주세요.';
-    }
-
-    if (formData.email && !/^[a-zA-Z0-9]+@[a-zA-Z]+(\.[a-zA-Z]+)+$/.test(formData.email)) {
-      newErrors.email = '이메일 형식이 올바르지 않습니다.';
-    }
-
-    // 비밀번호(선택)
-    const willChangePassword = !!(formData.password || formData.passwordConfirm);
-    if (willChangePassword) {
-      if (
-        !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_\-+=])[A-Za-z\d!@#$%^&*()_\-+=]{8,16}$/.test(
-          formData.password
-        )
-      ) {
-        newErrors.password =
-          '비밀번호는 8~16자, 영문 대/소문자·숫자·특수문자를 모두 포함해야 합니다.';
-      }
-      if (formData.password !== formData.passwordConfirm) {
-        newErrors.passwordConfirm = '비밀번호가 일치하지 않습니다.';
-      }
-    }
-
-    setErrors(newErrors);
-
-    // 에러가 하나라도 있으면 중단
-    const hasError = Object.values(newErrors).some((msg) => msg);
-    if (hasError) return;
-
-    // 통과 시 확인 모달 열기
-    setIsOpenConfirm(true);
-  };
-
-  // 확인 클릭 시 API 호출
+  // 확인 클릭 시 API 호출 — 비밀번호는 입력했을 때만 보낸다
   const handleClickConfirm = () => {
-    const willChangePassword = !!(formData.password || formData.passwordConfirm);
+    const values = form.getValues();
+    const willChangePassword = Boolean(values.password || values.passwordConfirm);
 
     const payload: UpdateMemberPayload = {
-      name: formData.name,
-      member_id: formData.memberId,
-      email: formData.email,
-      phone: formData.phone,
-      role: formData.role,
-      description: formData.description,
-      ...(willChangePassword ? { password: formData.password } : {}),
+      name: values.name,
+      member_id: values.memberId,
+      email: values.email,
+      phone: values.phone,
+      role: values.role,
+      description: values.description,
+      ...(willChangePassword ? { password: values.password } : {}),
     };
 
     updateMember(payload, {
@@ -101,24 +46,24 @@ export const EditMemberAction = ({ formData }: EditMemberActionProps) => {
         setIsOpenConfirm(false);
         setIsOpenResult(true);
       },
-      onError: () => {
+      onError: (error) => {
         setIsSuccess(false);
-        setResultNode('회원 수정에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        setResultNode(
+          getServerErrorMessage(error, '회원 수정에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+        );
         setIsOpenConfirm(false);
         setIsOpenResult(true);
       },
     });
   };
 
-  // 결과 모달 닫기
   const handleCloseResult = () => {
     setIsOpenResult(false);
-    if (isSuccess) navigate(`/member-management/${formData.memberId}`);
+    if (isSuccess) navigate(`/member-management/${form.getValues('memberId')}`);
   };
 
   return (
     <>
-      {/* “수정” 버튼 → handleSubmit 실행 */}
       <Button size="large" color="primary" onClick={handleSubmit} disabled={isPending}>
         {isPending ? '처리 중...' : '수정'}
       </Button>

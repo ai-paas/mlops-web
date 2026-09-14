@@ -71,7 +71,10 @@ describe('learning hooks', () => {
         learning_rate: '0.0001',
       });
 
-      expect(postSpy).toHaveBeenCalledWith('learning/training', { body: expect.any(FormData) });
+      expect(postSpy).toHaveBeenCalledWith('learning/training', {
+        body: expect.any(FormData),
+        timeout: false,
+      });
       const formData = postSpy.mock.calls[0][1]!.body as FormData;
       expect(formData.has('dataset_id')).toBe(false);
       expect(formData.get('model_id')).toBe('11'); // 숫자 → 문자열

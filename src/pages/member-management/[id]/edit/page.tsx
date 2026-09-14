@@ -1,75 +1,58 @@
 import { BreadCrumb, Button, Input, Textarea, RadioButton } from '@innogrid/ui';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router';
 import { formatPhone } from '@/util/phone';
 import { useGetMember } from '@/hooks/service/member';
 import { EditMemberAction } from '@/components/features/member-management/edit-member-action';
+import {
+  createInitialMemberEditFormValues,
+  memberEditSchema,
+  type MemberEditFormValues,
+  type MemberRole,
+} from '@/components/features/member-management/member-form';
 
-interface MemberForm {
-  name: string;
-  memberId: string;
-  email: string;
-  password: string;
-  passwordConfirm: string;
-  phone: string; // raw 숫자만 저장
-  role: string;
-  description: string;
-}
+const toDigits = (value: string) => value.replace(/\D/g, '').slice(0, 11);
 
 export default function MemberEditPage() {
   const navigate = useNavigate();
   const { id: paramId } = useParams<{ id: string }>();
-  const { member: member } = useGetMember(paramId!);
+  const { member } = useGetMember(paramId!);
 
-  const [formData, setFormData] = useState<MemberForm>({
-    name: '',
-    memberId: '',
-    email: '',
-    password: '',
-    passwordConfirm: '',
-    phone: '',
-    role: 'user',
-    description: '',
+  const form = useForm<MemberEditFormValues>({
+    resolver: zodResolver(memberEditSchema),
+    defaultValues: createInitialMemberEditFormValues(),
+    // 입력 즉시 검증해 인라인 에러를 보여준다
+    mode: 'onChange',
   });
-
-  const [errors, setErrors] = useState({
-    name: '',
-    memberId: '',
-    email: '',
-    password: '',
-    passwordConfirm: '',
+  const {
+    register,
+    control,
+    reset,
+    formState: { errors },
+  } = form;
+  // 이름·아이디는 수정 불가 — register하지 않고(비활성 입력은 RHF 값에서 빠진다) 폼 값을 표시만 한다.
+  // description은 innogrid Textarea의 value가 필수라 register와 함께 현재 값을 넘긴다.
+  const [name, memberId, description] = useWatch({
+    control,
+    name: ['name', 'memberId', 'description'],
   });
 
   // 서버 데이터 → 폼 초기값 주입
   useEffect(() => {
     if (!member) return;
-    const toDigits = (s: string) => (s || '').replace(/\D/g, '').slice(0, 11);
-    setFormData({
+    reset({
       name: member.name ?? '',
-      memberId: member.member_id ?? '', // 수정 화면에서는 보통 변경 불가
+      memberId: member.member_id ?? '',
       email: member.email ?? '',
       password: '',
       passwordConfirm: '',
       phone: toDigits(member.phone ?? ''),
-      role: member.role ?? 'user',
+      role: (member.role === 'admin' ? 'admin' : 'user') satisfies MemberRole,
       description: member.description ?? '',
     });
-    setErrors({ name: '', memberId: '', email: '', password: '', passwordConfirm: '' });
-  }, [member]);
-
-  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-
-    // 연락처는 숫자만 보관
-    if (name === 'phone') {
-      const digits = value.replace(/\D/g, '').slice(0, 11);
-      setFormData((prev) => ({ ...prev, phone: digits }));
-      return;
-    }
-
-    // 그 외 필드들은 단순 업데이트만
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  }, [member, reset]);
 
   return (
     <main>
@@ -93,12 +76,10 @@ export default function MemberEditPage() {
               <Input
                 name="name"
                 placeholder="이름을 입력해주세요."
-                value={formData.name}
-                onChange={onChange}
+                value={name}
                 readOnly
                 disabled
               />
-              {errors.name && <p className="page-input_item-input-desc">{errors.name}</p>}
             </div>
           </div>
 
@@ -106,8 +87,7 @@ export default function MemberEditPage() {
           <div className="page-input_item-box">
             <div className="page-input_item-name">아이디</div>
             <div className="page-input_item-data">
-              <Input name="memberId" value={formData.memberId} readOnly disabled />
-              {errors.memberId && <p className="page-input_item-input-desc">{errors.memberId}</p>}
+              <Input name="memberId" value={memberId} readOnly disabled />
             </div>
           </div>
 
@@ -116,12 +96,10 @@ export default function MemberEditPage() {
             <div className="page-input_item-name page-icon-requisite">이메일</div>
             <div className="page-input_item-data">
               <Input
-                name="email"
                 placeholder="email을 입력해주세요."
-                value={formData.email}
-                onChange={onChange}
+                errMessage={errors.email?.message}
+                {...register('email')}
               />
-              {errors.email && <p className="page-input_item-input-desc">{errors.email}</p>}
             </div>
           </div>
 
@@ -131,23 +109,18 @@ export default function MemberEditPage() {
             <div className="page-input_item-data">
               <Input
                 type="password"
-                name="password"
                 placeholder="새 비밀번호 (선택)"
-                value={formData.password}
-                onChange={onChange}
+                errMessage={errors.password?.message}
+                // 비밀번호를 바꾸면 확인란의 일치 에러도 즉시 다시 검사한다
+                {...register('password', { deps: ['passwordConfirm'] })}
               />
-              {errors.password && <p className="page-input_item-input-desc">{errors.password}</p>}
               <div className="page-input_item-data mt-2">
                 <Input
                   type="password"
-                  name="passwordConfirm"
                   placeholder="새 비밀번호 확인"
-                  value={formData.passwordConfirm}
-                  onChange={onChange}
+                  errMessage={errors.passwordConfirm?.message}
+                  {...register('passwordConfirm', { deps: ['password'] })}
                 />
-                {errors.passwordConfirm && (
-                  <p className="page-input_item-input-desc">{errors.passwordConfirm}</p>
-                )}
               </div>
             </div>
           </div>
@@ -156,11 +129,20 @@ export default function MemberEditPage() {
           <div className="page-input_item-box">
             <div className="page-input_item-name page-icon-requisite">연락처</div>
             <div className="page-input_item-data">
-              <Input
+              <Controller
+                control={control}
                 name="phone"
-                placeholder="숫자만 입력해주세요."
-                value={formatPhone(formData.phone)}
-                onChange={onChange}
+                render={({ field, fieldState }) => (
+                  <Input
+                    placeholder="숫자만 입력해주세요."
+                    value={formatPhone(field.value)}
+                    errMessage={fieldState.error?.message}
+                    onBlur={field.onBlur}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(toDigits(e.target.value))
+                    }
+                  />
+                )}
               />
             </div>
           </div>
@@ -169,21 +151,29 @@ export default function MemberEditPage() {
           <div className="page-input_item-box">
             <div className="page-input_item-name page-icon-requisite">역할</div>
             <div className="page-input_item_round-data">
-              <div className="py-2">
-                <RadioButton
-                  id="radio-user"
-                  label="사용자"
-                  value="user"
-                  checked={formData.role === 'user'}
-                  onCheckedChange={() => setFormData((p) => ({ ...p, role: 'user' }))}
-                />
-              </div>
-              <RadioButton
-                id="radio-admin"
-                label="관리자"
-                value="admin"
-                checked={formData.role === 'admin'}
-                onCheckedChange={() => setFormData((p) => ({ ...p, role: 'admin' }))}
+              <Controller
+                control={control}
+                name="role"
+                render={({ field }) => (
+                  <>
+                    <div className="py-2">
+                      <RadioButton
+                        id="radio-user"
+                        label="사용자"
+                        value="user"
+                        checked={field.value === 'user'}
+                        onCheckedChange={() => field.onChange('user')}
+                      />
+                    </div>
+                    <RadioButton
+                      id="radio-admin"
+                      label="관리자"
+                      value="admin"
+                      checked={field.value === 'admin'}
+                      onCheckedChange={() => field.onChange('admin')}
+                    />
+                  </>
+                )}
               />
             </div>
           </div>
@@ -193,10 +183,9 @@ export default function MemberEditPage() {
             <div className="page-input_item-name">설명</div>
             <div className="page-input_item-data">
               <Textarea
-                name="description"
-                value={formData.description}
-                onChange={onChange}
                 placeholder="설명을 입력해주세요."
+                {...register('description')}
+                value={description}
               />
             </div>
           </div>
@@ -210,7 +199,7 @@ export default function MemberEditPage() {
             <Button size="large" color="secondary" onClick={() => navigate(-1)}>
               취소
             </Button>
-            <EditMemberAction formData={formData} />
+            <EditMemberAction form={form} />
           </div>
         </div>
       </div>

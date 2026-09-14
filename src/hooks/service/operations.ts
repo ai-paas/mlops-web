@@ -11,6 +11,26 @@ interface ListOperationsParams {
   pageSize?: number;
 }
 
+// backend 응답 envelope 다중 형태:
+//   1) {data: [...]} — flat array
+//   2) {data: {items: [...], nextPageToken}} — PagedData wrapper (현재 backend)
+//   3) {items: [...]} — 일부 legacy
+//   4) [...] — raw array
+const unwrapOperations = (payload: unknown): Operation[] => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload as Operation[];
+  if (typeof payload !== 'object') return [];
+
+  const envelope = payload as { data?: unknown; items?: unknown };
+  if (Array.isArray(envelope.data)) return envelope.data as Operation[];
+  if (envelope.data && typeof envelope.data === 'object' && 'items' in envelope.data) {
+    const items = (envelope.data as { items?: Operation[] }).items;
+    return items ?? [];
+  }
+  if (Array.isArray(envelope.items)) return envelope.items as Operation[];
+  return [];
+};
+
 // 작업 목록 조회
 export const useGetOperations = (params: ListOperationsParams = {}) => {
   const searchParams = Object.fromEntries(
@@ -19,31 +39,10 @@ export const useGetOperations = (params: ListOperationsParams = {}) => {
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.operations.list(searchParams),
-    queryFn: () =>
-      api
-        .get('any-cloud/operations', { searchParams })
-        .json<{
-          data?: Operation[] | { items?: Operation[] };
-          items?: Operation[];
-        } | Operation[]>(),
+    queryFn: () => api.get('any-cloud/operations', { searchParams }).json<unknown>(),
   });
 
-  // backend 응답 envelope 다중 형태:
-  //   1) {data: [...]} — flat array
-  //   2) {data: {items: [...], nextPageToken}} — PagedData wrapper (현재 backend)
-  //   3) {items: [...]} — 일부 legacy
-  //   4) [...] — raw array
-  const items: Operation[] = (() => {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    const d = data.data;
-    if (Array.isArray(d)) return d;
-    if (d && typeof d === 'object' && 'items' in d) return d.items ?? [];
-    if ('items' in data && Array.isArray(data.items)) return data.items;
-    return [];
-  })();
-
-  return { operations: items, isPending, isError, error };
+  return { operations: unwrapOperations(data), isPending, isError, error };
 };
 
 // 작업 단건 조회 (polling 시 refetchInterval 활용)
@@ -59,6 +58,41 @@ export const useGetOperation = (
   });
 
   return { operation: data, isPending, isError, error, refetch };
+};
+
+/** 백엔드가 VM 클러스터 operation 을 이 resourceType 으로 기록한다. */
+const CLUSTER_RESOURCE_TYPE = 'cluster';
+
+/** SSE 구독 대상 id 조회 — 진행률 자체는 SSE 가 나른다. */
+export const useActiveClusterOperation = (
+  clusterName?: string,
+  options?: { enabled?: boolean; refetchInterval?: number | false }
+) => {
+  const { data, isPending } = useQuery({
+    queryKey: queryKeys.operations.list({
+      resourceType: CLUSTER_RESOURCE_TYPE,
+      resourceId: clusterName,
+      active: true,
+    }),
+    queryFn: () =>
+      api
+        .get('any-cloud/operations', {
+          searchParams: {
+            resourceType: CLUSTER_RESOURCE_TYPE,
+            resourceId: clusterName ?? '',
+            pageSize: 5,
+          },
+        })
+        .json<unknown>(),
+    enabled: (options?.enabled ?? true) && !!clusterName,
+    refetchInterval: options?.refetchInterval ?? 10_000,
+  });
+
+  const active = unwrapOperations(data).find(
+    (op) => op.state === 'PENDING' || op.state === 'RUNNING'
+  );
+
+  return { operation: active, operationId: active?.id, isPending };
 };
 
 // 진행 중 작업 취소

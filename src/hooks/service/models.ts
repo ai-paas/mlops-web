@@ -29,7 +29,7 @@ export const useGetModels = (
   params: GetModelsParams = {},
   { enabled = true }: { enabled?: boolean }
 ) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.models.list(params),
     queryFn: () => api.get<Page<Model>>('models', { searchParams: { ...params } }).json(),
     enabled,
@@ -44,11 +44,12 @@ export const useGetModels = (
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetCustomModels = (params: GetCustomModelsParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.customModels.list(params),
     queryFn: () =>
       api
@@ -67,11 +68,12 @@ export const useGetCustomModels = (params: GetCustomModelsParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetModelCatalogs = (params: GetModelCatalogsParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.modelCatalogs.list(params),
     queryFn: () =>
       api
@@ -90,11 +92,12 @@ export const useGetModelCatalogs = (params: GetModelCatalogsParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetModelProviders = (params: GetModelProvidersParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.modelProviders.list(params),
     queryFn: () =>
       api.get<Page<ModelProvider>>('models/providers', { searchParams: { ...params } }).json(),
@@ -109,11 +112,12 @@ export const useGetModelProviders = (params: GetModelProvidersParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetModelTypes = (params: GetModelTypesParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.modelTypes.list(params),
     queryFn: () => api.get<Page<ModelType>>('models/types', { searchParams: { ...params } }).json(),
   });
@@ -127,11 +131,12 @@ export const useGetModelTypes = (params: GetModelTypesParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetModelFormats = (params: GetModelFormatsParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.modelFormats.list(params),
     queryFn: () =>
       api.get<Page<ModelFormat>>('models/formats', { searchParams: { ...params } }).json(),
@@ -146,11 +151,12 @@ export const useGetModelFormats = (params: GetModelFormatsParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetModel = <T = Model>(model_id: number) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.models.detail(model_id),
     queryFn: () => api.get(`models/${model_id}`).json<T>(),
   });
@@ -159,13 +165,14 @@ export const useGetModel = <T = Model>(model_id: number) => {
     model: data,
     isPending,
     isError,
+    error,
   };
 };
 
 export const useDeleteModel = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (modelId: number) =>
       api.delete(`models/${modelId}`).json<Record<string, unknown>>(),
     onSuccess: (_, modelId) => {
@@ -180,6 +187,7 @@ export const useDeleteModel = () => {
     deleteModel: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -187,8 +195,10 @@ export const useDeleteModel = () => {
 export const useCreateModel = () => {
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending, isError, isSuccess } = useMutation({
-    mutationFn: (data: FormData) => api.post('models', { body: data }).json<Model>(),
+  const { mutateAsync, isPending, isError, error, isSuccess } = useMutation({
+    // 모델 파일 업로드 — 기본 타임아웃(30s) 해제
+    mutationFn: (data: FormData) =>
+      api.post('models', { body: data, timeout: false }).json<Model>(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.modelCatalogs.all });
@@ -200,12 +210,13 @@ export const useCreateModel = () => {
     createModel: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useGetHubModels = (params: GetHubModelsParams) => {
-  const { data, isPending, isFetching, isError } = useQuery({
+  const { data, isPending, isFetching, isError, error } = useQuery({
     queryKey: queryKeys.hubModels.list(params),
     // searchParams는 params에서만 파생 — queryFn 내부에서 만들어 쿼리키(params)와의
     // 정합성을 lint(@tanstack/query/exhaustive-deps)가 보증할 수 있게 한다.
@@ -240,11 +251,12 @@ export const useGetHubModels = (params: GetHubModelsParams) => {
     // 페이지/필터/검색 변경 등 모든 요청 진행 중에 true (스켈레톤 표시용)
     isFetching,
     isError,
+    error,
   };
 };
 
 export const useGetHubModelTagsByGroup = (params: HubModelTagParams) => {
-  const { data, isFetching, isPending, isError, refetch } = useQuery({
+  const { data, isFetching, isPending, isError, error, refetch } = useQuery({
     queryKey: queryKeys.hubModelTags.list(params),
     queryFn: () =>
       api
@@ -260,6 +272,7 @@ export const useGetHubModelTagsByGroup = (params: HubModelTagParams) => {
     isFetching,
     isPending,
     isError,
+    error,
     refetch,
   };
 };
@@ -272,7 +285,7 @@ export const useGetImprovementTaskTypes = (
   params: GetImprovementTaskTypesParams = {},
   { enabled = true }: { enabled?: boolean } = {}
 ) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.modelImprovements.taskTypes(params),
     queryFn: () => {
       const searchParams = new URLSearchParams(
@@ -291,12 +304,13 @@ export const useGetImprovementTaskTypes = (
     taskTypes: data ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
 /** 모델 최적화/경량화 task 생성. 비동기 처리이며, 반환된 task_id로 상태를 조회한다. */
 export const useSubmitImprovement = () => {
-  const { mutateAsync, isPending, isError, isSuccess } = useMutation({
+  const { mutateAsync, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (body: CreateImprovementRequest) =>
       api.post('model-improvements', { json: body }).json<CreateImprovementResponse>(),
   });
@@ -305,6 +319,7 @@ export const useSubmitImprovement = () => {
     submitImprovement: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -317,7 +332,7 @@ export const useGetImprovementStatus = (
   taskId?: string,
   { enabled = true }: { enabled?: boolean } = {}
 ) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.modelImprovements.status(taskId),
     queryFn: () =>
       api
@@ -336,5 +351,6 @@ export const useGetImprovementStatus = (
     improvementStatus: data,
     isPending,
     isError,
+    error,
   };
 };

@@ -1,11 +1,13 @@
-import { HTTPError } from 'ky';
+import { HTTPError, TimeoutError } from 'ky';
 import { delay, http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BASE_URL } from '@/test/mocks/handlers';
 import { server } from '@/test/mocks/server';
 import {
+  DEFAULT_TIMEOUT_MS,
   api,
   getAccessToken,
+  getServerErrorMessage,
   getOrCreateRefreshPromise,
   refreshAccessToken,
   setAccessToken,
@@ -28,8 +30,9 @@ type NodeProcessEvents = {
 };
 const nodeProcess = (globalThis as unknown as { process: NodeProcessEvents }).process;
 
-// refresh 실패 경로에서 발생하는 미처리 rejection(해당 describe의 '버그 의심' 참고)이
-// vitest 전체 실행을 실패시키지 않도록 가로채 수집한다. 테스트 후 반드시 restore.
+// refresh 실패 경로에서 미처리 rejection이 새지 않는지 검증하기 위해 가로채 수집한다.
+// (과거 api.ts가 큐 프로미스 queuedResponse를 흡수하지 않아 1건/동시 2건이 잡혔다 — 2026-09-04 수정,
+// 아래 describe의 0건 단언이 회귀 테스트다) 테스트 후 반드시 restore.
 const captureUnhandledRejections = () => {
   const captured: unknown[] = [];
   const original = nodeProcess.listeners('unhandledRejection');
@@ -281,11 +284,11 @@ describe('refresh 실패 — 큐 reject', () => {
     expect(getAccessToken()).toBeNull();
     expect(consoleErrorSpy).toHaveBeenCalled();
 
-    // 버그 의심 — 팀 확인 필요: 실패 경로에서 큐에 든 재시도 프로미스(queuedResponse)가
-    // 반환되지 않은 채 reject되어 미처리 rejection으로 남는다 (api.ts afterResponse catch).
-    // 수정 시 이 기대값(1건)도 0건으로 갱신할 것.
-    await vi.waitFor(() => expect(rejections.captured).toHaveLength(1));
-    expect((rejections.captured[0] as Error).message).toBe('토큰 재발급이 실패했습니다.');
+    // 회귀: 실패 경로에서 큐에 든 재시도 프로미스(queuedResponse)는 catch가 원 응답을 반환해
+    // 소비자가 없다 — api.ts가 생성 직후 흡수하므로 미처리 rejection이 남지 않아야 한다.
+    // (수정 전에는 '토큰 재발급이 실패했습니다.' 1건이 잡혔다)
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(rejections.captured).toHaveLength(0);
   });
 
   it('동시 대기 중이던 요청도 모두 실패하며 refresh는 1회만 시도된다', async () => {
@@ -307,8 +310,10 @@ describe('refresh 실패 — 큐 reject', () => {
     expect(two.status).toBe('rejected');
     expect(refreshSpy).toHaveBeenCalledTimes(1);
 
-    // 버그 의심 — 팀 확인 필요: 큐에 쌓였던 2건 모두 미처리 rejection으로 남는다
-    await vi.waitFor(() => expect(rejections.captured).toHaveLength(2));
+    // 회귀: 큐에 쌓였던 2건 모두 각자의 afterResponse 훅이 흡수해 미처리 rejection이 남지 않는다
+    // (수정 전에는 2건이 잡혔다)
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(rejections.captured).toHaveLength(0);
   });
 
   it('refresh 실패 후 다음 요청은 새로운 refresh를 시도해 복구된다', async () => {
@@ -455,6 +460,108 @@ describe('refreshAccessToken', () => {
 
     await expect(refreshAccessToken()).rejects.toThrow('토큰 재발급 응답이 올바르지 않습니다.');
     expect(getAccessToken()).toBeNull();
+  });
+});
+
+// ============================================
+// getServerErrorMessage — 사용자 오류 문구 (TODO 15)
+// ============================================
+describe('getServerErrorMessage', () => {
+  const FALLBACK = '요청 처리 중 오류가 발생했습니다.';
+
+  it('서버가 detail 문자열을 보내면 그대로 사용한다', async () => {
+    setAccessToken('valid-token');
+    server.use(
+      http.get(`${BASE_URL}/forbidden`, () =>
+        HttpResponse.json({ detail: '권한이 없습니다.' }, { status: 403 })
+      )
+    );
+
+    const error = await api.get('forbidden').then(
+      () => null,
+      (caught: unknown) => caught
+    );
+
+    expect(getServerErrorMessage(error, FALLBACK)).toBe('권한이 없습니다.');
+  });
+
+  it('detail이 없거나 문자열이 아니면(422 검증 배열 등) 호출부 기본 문구를 쓴다', async () => {
+    setAccessToken('valid-token');
+    server.use(
+      http.get(`${BASE_URL}/plain`, () => HttpResponse.json({ message: 'boom' }, { status: 500 })),
+      http.get(`${BASE_URL}/validation`, () =>
+        HttpResponse.json({ detail: [{ msg: 'Field required' }] }, { status: 422 })
+      )
+    );
+
+    const plain = await api.get('plain').then(
+      () => null,
+      (caught: unknown) => caught
+    );
+    const validation = await api.get('validation').then(
+      () => null,
+      (caught: unknown) => caught
+    );
+
+    expect(getServerErrorMessage(plain, FALLBACK)).toBe(FALLBACK);
+    expect(getServerErrorMessage(validation, FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('타임아웃·네트워크 단절은 원인을 알 수 있는 문구로, 그 외 에러는 기본 문구로 바꾼다', () => {
+    const request = new Request('http://localhost/x');
+
+    expect(getServerErrorMessage(new TimeoutError(request), FALLBACK)).toBe(
+      '응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.'
+    );
+    expect(getServerErrorMessage(new TypeError('Failed to fetch'), FALLBACK)).toBe(
+      '네트워크 연결을 확인해주세요.'
+    );
+    // fetch와 무관한 TypeError(코드 결함)는 네트워크 문구로 위장하지 않는다
+    expect(getServerErrorMessage(new TypeError('x is not a function'), FALLBACK)).toBe(FALLBACK);
+    expect(getServerErrorMessage(new Error('unknown'), FALLBACK)).toBe(FALLBACK);
+    expect(getServerErrorMessage(undefined, FALLBACK)).toBe(FALLBACK);
+  });
+});
+
+// ============================================
+// 전역 timeout / retry 기본값 (TODO 14)
+// ============================================
+describe('timeout / retry 기본값', () => {
+  it('GET 5xx를 ky가 자체 재시도하지 않는다 — 재시도 계층은 React Query 한 곳', async () => {
+    setAccessToken('valid-token');
+    let callCount = 0;
+    server.use(
+      http.get(`${BASE_URL}/flaky`, () => {
+        callCount += 1;
+        return HttpResponse.json({ detail: 'boom' }, { status: 500 });
+      })
+    );
+
+    await expect(api.get('flaky')).rejects.toBeInstanceOf(HTTPError);
+    // ky 기본값(limit 2)이었다면 3회 요청됐다
+    expect(callCount).toBe(1);
+  });
+
+  it('응답이 없으면 기본 타임아웃(30초) 후 TimeoutError로 실패한다', async () => {
+    vi.useFakeTimers();
+    try {
+      setAccessToken('valid-token');
+      server.use(http.get(`${BASE_URL}/hang`, () => new Promise<never>(() => {})));
+
+      const settled = api.get('hang').then(
+        () => 'resolved',
+        (error: unknown) => error
+      );
+
+      // 타임아웃 직전까지는 여전히 대기 중이다 (ky 기본 10초로 되돌아가면 여기서 잡힌다)
+      await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS - 1);
+      await expect(Promise.race([settled, Promise.resolve('pending')])).resolves.toBe('pending');
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(settled).resolves.toBeInstanceOf(TimeoutError);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

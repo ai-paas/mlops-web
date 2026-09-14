@@ -1,746 +1,87 @@
 ---
 name: workflow-canvas
-description: XyFlow를 사용한 워크플로우 캔버스 기능을 개발합니다. 노드 기반 워크플로우 편집기, 드래그앤드롭 캔버스, 커스텀 노드 타입, 엣지 연결 등 비주얼 워크플로우 빌더를 구현할 때 사용하세요.
+description: XyFlow(@xyflow/react v12) 기반 워크플로우 캔버스를 개발합니다. 노드 타입 추가·수정, 노드 설정 패널, 엣지·배치·단축키·undo/redo, zustand 스토어, 백엔드 저장 정의와의 변환, 캔버스 테스트(jsdom 스텁·Playwright)가 필요할 때 사용하세요.
 ---
 
-# Workflow Canvas Development Skill
-
-XyFlow (React Flow) v12.8.3을 활용한 노드 기반 워크플로우 캔버스를 구축합니다.
-
-## When to Use This Skill
-
-- 워크플로우 캔버스 페이지를 새로 만들 때
-- 커스텀 노드 타입을 추가할 때 (Start, Model, Knowledgebase, End 등)
-- 드래그 앤 드롭으로 노드를 추가하는 기능이 필요할 때
-- 노드 연결(Edge) 로직 및 검증이 필요할 때
-- 노드 선택, 설정 패널, 저장/불러오기 기능을 구현할 때
-- Undo/Redo, 자동 레이아웃 등 고급 기능을 추가할 때
-
-## 기술 스택
-
-- **그래프 라이브러리**: XyFlow v12.8.3 (@xyflow/react)
-- **프레임워크**: React 18.3.1 + TypeScript
-- **스타일링**: Tailwind CSS 4.1.11
-
-## 프로젝트의 워크플로우 구조
-
-AI-PaaS 플랫폼의 워크플로우는 다음 노드 타입으로 구성됩니다:
-
-1. **Start Node** (시작): 파란색, 워크플로우 시작점
-2. **Model Node** (모델): 보라색, LLM 모델 실행
-3. **Knowledgebase Node** (지식베이스): 초록색, 지식 검색
-4. **End Node** (답변): 주황색, 워크플로우 종료
-
-## 기본 구조
-
-### 1. React Flow Provider 설정
-
-```typescript
-// src/pages/workflow/create/page.tsx
-import { ReactFlowProvider } from '@xyflow/react';
-
-export default function WorkflowCreatePage() {
-  return (
-    <div>
-      <ReactFlowProvider>
-        <WorkflowEditor />
-      </ReactFlowProvider>
-    </div>
-  );
-}
-```
-
-### 2. 캔버스 컴포넌트
-
-```typescript
-// src/components/features/workflow/workflow-canvas.tsx
-import { FlowChart } from '@/components/ui/flow-chart';
-import { Handle, Position, type Edge, type Node } from '@xyflow/react';
-
-const initialNodes: Node[] = [
-  {
-    id: 'n1',
-    position: { x: 0, y: 100 },
-    data: { label: '시작' },
-    type: 'start',
-  },
-  {
-    id: 'n2',
-    position: { x: 400, y: 100 },
-    data: { label: '모델' },
-    type: 'model',
-  },
-];
-
-const initialEdges: Edge[] = [
-  {
-    id: 'e1-2',
-    source: 'n1',
-    target: 'n2',
-  },
-];
-
-export const WorkflowCanvas = ({ initialNodes, initialEdges }) => {
-  return (
-    <div className="size-full">
-      <FlowChart
-        nodeTypes={{
-          start: StartNode,
-          model: ModelNode,
-          knowledgebase: KnowledgebaseNode,
-          end: EndNode,
-        }}
-        initialNodes={initialNodes}
-        initialEdges={initialEdges}
-      />
-    </div>
-  );
-};
-```
-
-## 커스텀 노드 구현
-
-### Start Node 예제
-
-```typescript
-import { Handle, Position } from '@xyflow/react';
-import { memo } from 'react';
-
-const StartNode = memo(({ data, isConnectable, selected }) => {
-  return (
-    <div>
-      <div
-        className={`flex rounded-2xl border-[2px] ${
-          selected ? 'border-blue-500' : 'border-transparent'
-        }`}
-      >
-        <div className="group relative w-[240px] rounded-[15px] border border-transparent bg-white pb-1 shadow-xs hover:shadow-lg">
-          <div className="flex items-center rounded-t-2xl px-3 pt-3 pb-2">
-            {/* 아이콘 */}
-            <div className="mr-2 flex size-6 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-white/2 bg-blue-500 text-white shadow-md">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                {/* SVG 아이콘 */}
-              </svg>
-            </div>
-
-            {/* 라벨 */}
-            <div className="mr-1 flex grow items-center truncate">
-              {data.label}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 우측 연결 핸들 */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        isConnectable={isConnectable}
-        style={{
-          backgroundColor: '#296dff',
-          height: '12px',
-          width: '2px',
-          borderRadius: '1px',
-        }}
-      />
-    </div>
-  );
-});
-
-StartNode.displayName = 'StartNode';
-```
-
-### Model Node 예제 (양방향 연결)
-
-```typescript
-const ModelNode = memo(({ data, isConnectable, selected }) => {
-  return (
-    <div>
-      {/* 좌측 입력 핸들 */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        isConnectable={isConnectable}
-        style={{
-          backgroundColor: '#296dff',
-          height: '12px',
-          width: '2px',
-          borderRadius: '1px',
-        }}
-      />
-
-      <div
-        className={`flex rounded-2xl border-[2px] ${
-          selected ? 'border-blue-500' : 'border-transparent'
-        }`}
-      >
-        <div className="group relative w-[240px] rounded-[15px] border border-transparent bg-white pb-1 shadow-xs hover:shadow-lg">
-          <div className="flex items-center rounded-t-2xl px-3 pt-3 pb-2">
-            {/* 보라색 LLM 아이콘 */}
-            <div className="mr-2 flex size-6 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-white/2 bg-indigo-500 text-white shadow-md">
-              {/* 아이콘 SVG */}
-            </div>
-            <div className="mr-1 flex grow items-center truncate">
-              {data.label}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 우측 출력 핸들 */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        isConnectable={isConnectable}
-        style={{
-          backgroundColor: '#296dff',
-          height: '12px',
-          width: '2px',
-          borderRadius: '1px',
-        }}
-      />
-    </div>
-  );
-});
-
-ModelNode.displayName = 'ModelNode';
-```
-
-### End Node 예제 (입력만)
-
-```typescript
-const EndNode = memo(({ data, isConnectable, selected }) => {
-  return (
-    <div>
-      {/* 좌측 입력 핸들만 */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        isConnectable={isConnectable}
-        style={{
-          backgroundColor: '#296dff',
-          height: '12px',
-          width: '2px',
-          borderRadius: '1px',
-        }}
-      />
-
-      <div
-        className={`flex rounded-2xl border-[2px] ${
-          selected ? 'border-blue-500' : 'border-transparent'
-        }`}
-      >
-        <div className="group relative w-[240px] rounded-[15px] border border-transparent bg-white pb-1 shadow-xs hover:shadow-lg">
-          <div className="flex items-center rounded-t-2xl px-3 pt-3 pb-2">
-            {/* 주황색 답변 아이콘 */}
-            <div className="mr-2 flex size-6 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-white/2 bg-amber-500 text-white shadow-md">
-              {/* 아이콘 SVG */}
-            </div>
-            <div className="mr-1 flex grow items-center truncate">
-              {data.label}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
-
-EndNode.displayName = 'EndNode';
-```
-
-## React Flow Hooks
-
-### useReactFlow - 노드 및 엣지 제어
-
-```typescript
-import { useReactFlow } from '@xyflow/react';
-
-function WorkflowEditor() {
-  const { getNodes, getEdges, setNodes, setEdges, addNodes, addEdges } = useReactFlow();
-
-  const handleSave = () => {
-    const nodes = getNodes();
-    const edges = getEdges();
-    console.log('Saving workflow:', { nodes, edges });
-  };
-
-  const handleAddNode = () => {
-    const newNode = {
-      id: `n${Date.now()}`,
-      position: { x: 200, y: 200 },
-      data: { label: '새 노드' },
-      type: 'model',
-    };
-    addNodes(newNode);
-  };
-
-  return (
-    <div>
-      <button onClick={handleSave}>저장</button>
-      <button onClick={handleAddNode}>노드 추가</button>
-    </div>
-  );
-}
-```
-
-### useNodesState & useEdgesState - 로컬 상태 관리
-
-```typescript
-import { useNodesState, useEdgesState } from '@xyflow/react';
-
-function WorkflowCanvas() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  const onConnect = useCallback((connection) => {
-    setEdges((eds) => addEdge(connection, eds));
-  }, [setEdges]);
-
-  return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
-    />
-  );
-}
-```
-
-## 이벤트 핸들링
-
-### 노드 이벤트
-
-```typescript
-import { ReactFlow } from '@xyflow/react';
-
-function FlowCanvas() {
-  const onNodeClick = (event, node) => {
-    console.log('Node clicked:', node);
-  };
-
-  const onNodeDoubleClick = (event, node) => {
-    console.log('Node double clicked:', node);
-  };
-
-  const onNodeDragStop = (event, node) => {
-    console.log('Node dragged to:', node.position);
-  };
-
-  return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodeClick={onNodeClick}
-      onNodeDoubleClick={onNodeDoubleClick}
-      onNodeDragStop={onNodeDragStop}
-    />
-  );
-}
-```
-
-### 엣지 이벤트
-
-```typescript
-const onEdgeClick = (event, edge) => {
-  console.log('Edge clicked:', edge);
-};
-
-const onEdgeUpdate = (oldEdge, newConnection) => {
-  setEdges((els) => updateEdge(oldEdge, newConnection, els));
-};
-
-return (
-  <ReactFlow
-    edges={edges}
-    onEdgeClick={onEdgeClick}
-    onEdgeUpdate={onEdgeUpdate}
-  />
-);
-```
-
-### 캔버스 이벤트
-
-```typescript
-const onPaneClick = (event) => {
-  console.log('Canvas clicked');
-};
-
-const onSelectionChange = ({ nodes, edges }) => {
-  console.log('Selected nodes:', nodes);
-  console.log('Selected edges:', edges);
-};
-
-return (
-  <ReactFlow
-    onPaneClick={onPaneClick}
-    onSelectionChange={onSelectionChange}
-  />
-);
-```
-
-## 드래그 앤 드롭 구현
-
-### 노드 팔레트 (사이드바)
-
-```typescript
-function WorkflowComponentPanel() {
-  const onDragStart = (event, nodeType) => {
-    event.dataTransfer.setData('application/reactflow', nodeType);
-    event.dataTransfer.effectAllowed = 'move';
-  };
-
-  return (
-    <aside className="workflow-sidebar">
-      <div
-        onDragStart={(e) => onDragStart(e, 'model')}
-        draggable
-        className="node-item"
-      >
-        모델 노드
-      </div>
-      <div
-        onDragStart={(e) => onDragStart(e, 'knowledgebase')}
-        draggable
-        className="node-item"
-      >
-        지식베이스 노드
-      </div>
-    </aside>
-  );
-}
-```
-
-### 드롭 존 (캔버스)
-
-```typescript
-import { useReactFlow } from '@xyflow/react';
-
-function WorkflowCanvas() {
-  const { screenToFlowPosition } = useReactFlow();
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-
-  const onDrop = useCallback(
-    (event) => {
-      event.preventDefault();
-
-      const type = event.dataTransfer.getData('application/reactflow');
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      const newNode = {
-        id: `${type}-${Date.now()}`,
-        type,
-        position,
-        data: { label: `${type} 노드` },
-      };
-
-      setNodes((nds) => nds.concat(newNode));
-    },
-    [screenToFlowPosition, setNodes]
-  );
-
-  const onDragOver = useCallback((event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  return (
-    <ReactFlow
-      nodes={nodes}
-      onNodesChange={onNodesChange}
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-    />
-  );
-}
-```
-
-## 스타일링 및 설정
-
-### 필수 CSS 임포트
-
-```typescript
-import '@xyflow/react/dist/style.css';
-```
-
-### 커스텀 스타일
-
-```scss
-// workflow.module.scss
-.container {
-  display: flex;
-  height: calc(100vh - 80px);
-}
-
-.contentBox {
-  flex: 1;
-  position: relative;
-  background: #f5f5f5;
-}
-
-.react-flow__node {
-  cursor: pointer;
-}
-
-.react-flow__edge {
-  stroke: #296dff;
-  stroke-width: 2;
-}
-
-.react-flow__edge.selected {
-  stroke: #1e40af;
-}
-
-.react-flow__handle {
-  width: 2px;
-  height: 12px;
-  border-radius: 1px;
-}
-```
-
-### React Flow 설정
-
-```typescript
-<ReactFlow
-  nodes={nodes}
-  edges={edges}
-  nodeTypes={nodeTypes}
-  fitView
-  minZoom={0.5}
-  maxZoom={2}
-  defaultEdgeOptions={{
-    animated: true,
-    style: { stroke: '#296dff', strokeWidth: 2 },
-  }}
-  connectionLineStyle={{ stroke: '#296dff', strokeWidth: 2 }}
-  snapToGrid={true}
-  snapGrid={[15, 15]}
->
-  <Background variant="dots" gap={12} size={1} />
-  <Controls />
-  <MiniMap />
-</ReactFlow>
-```
-
-## 고급 기능
-
-### 1. 노드 검증 (연결 규칙)
-
-```typescript
-const isValidConnection = (connection) => {
-  // Start 노드는 출력만 가능
-  if (connection.sourceHandle && connection.source.startsWith('start')) {
-    return true;
-  }
-
-  // End 노드는 입력만 가능
-  if (connection.targetHandle && connection.target.startsWith('end')) {
-    return true;
-  }
-
-  return false;
-};
-
-<ReactFlow isValidConnection={isValidConnection} />;
-```
-
-### 2. 자동 레이아웃 (Dagre)
-
-```typescript
-import dagre from 'dagre';
-
-const getLayoutedElements = (nodes, edges, direction = 'LR') => {
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: direction });
-
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: 240, height: 80 });
-  });
-
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
-  });
-
-  dagre.layout(dagreGraph);
-
-  const layoutedNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    return {
-      ...node,
-      position: {
-        x: nodeWithPosition.x - 120,
-        y: nodeWithPosition.y - 40,
-      },
-    };
-  });
-
-  return { nodes: layoutedNodes, edges };
-};
-```
-
-### 3. Undo/Redo 기능
-
-```typescript
-import { useCallback, useState } from 'react';
-
-function useUndoRedo(initialNodes, initialEdges) {
-  const [past, setPast] = useState([]);
-  const [future, setFuture] = useState([]);
-  const [present, setPresent] = useState({ nodes: initialNodes, edges: initialEdges });
-
-  const undo = useCallback(() => {
-    if (past.length === 0) return;
-
-    const previous = past[past.length - 1];
-    const newPast = past.slice(0, past.length - 1);
-
-    setPast(newPast);
-    setFuture([present, ...future]);
-    setPresent(previous);
-  }, [past, present, future]);
-
-  const redo = useCallback(() => {
-    if (future.length === 0) return;
-
-    const next = future[0];
-    const newFuture = future.slice(1);
-
-    setPast([...past, present]);
-    setFuture(newFuture);
-    setPresent(next);
-  }, [past, present, future]);
-
-  const setState = useCallback((newState) => {
-    setPast([...past, present]);
-    setPresent(newState);
-    setFuture([]);
-  }, [past, present]);
-
-  return { present, undo, redo, setState, canUndo: past.length > 0, canRedo: future.length > 0 };
-}
-```
-
-### 4. 노드 데이터 수정 (설정 패널)
-
-```typescript
-function WorkflowSettingPanel({ selectedNode }) {
-  const { setNodes } = useReactFlow();
-
-  const updateNodeData = (nodeId, newData) => {
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === nodeId) {
-          return {
-            ...node,
-            data: { ...node.data, ...newData },
-          };
-        }
-        return node;
-      })
-    );
-  };
-
-  if (!selectedNode) return null;
-
-  return (
-    <div className="settings-panel">
-      <h3>노드 설정</h3>
-      <Input
-        label="레이블"
-        value={selectedNode.data.label}
-        onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
-      />
-      {selectedNode.type === 'model' && (
-        <Select
-          label="모델 선택"
-          value={selectedNode.data.modelId}
-          onChange={(value) => updateNodeData(selectedNode.id, { modelId: value })}
-        />
-      )}
-    </div>
-  );
-}
-```
-
-## TypeScript 타입 정의
-
-```typescript
-import type { Node, Edge, NodeProps } from '@xyflow/react';
-
-// 노드 데이터 타입
-interface StartNodeData {
-  label: string;
-}
-
-interface ModelNodeData {
-  label: string;
-  modelId?: string;
-  temperature?: number;
-}
-
-interface KnowledgebaseNodeData {
-  label: string;
-  knowledgeBaseId?: string;
-}
-
-interface EndNodeData {
-  label: string;
-}
-
-// 노드 타입 정의
-export type WorkflowNode =
-  | Node<StartNodeData, 'start'>
-  | Node<ModelNodeData, 'model'>
-  | Node<KnowledgebaseNodeData, 'knowledgebase'>
-  | Node<EndNodeData, 'end'>;
-
-// 워크플로우 타입
-export interface Workflow {
-  id: string;
-  name: string;
-  description: string;
-  nodes: WorkflowNode[];
-  edges: Edge[];
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
-## 디버깅 팁
-
-```typescript
-// 노드/엣지 상태 로깅
-useEffect(() => {
-  console.log('Nodes:', nodes);
-  console.log('Edges:', edges);
-}, [nodes, edges]);
-
-// React Flow 인스턴스 접근
-const reactFlowInstance = useReactFlow();
-console.log('Flow bounds:', reactFlowInstance.getViewport());
-```
+# 워크플로우 캔버스
+
+## 파일 지도
+
+| 역할 | 파일 |
+|---|---|
+| 캔버스 본체(노드 컴포넌트, `nodeTypes`, 배치·단축키·엣지 메뉴) | `src/components/ui/flow-chart.tsx` (+ `flow-chart.css`, `flow-chart.test.tsx`) |
+| 상태 스토어(zustand) | `src/store/useWorkflowStore.ts` (+ `.test.ts`) |
+| 에디터 셸(팔레트 + 캔버스 + 저장 버튼 + 설정 패널) | `src/components/features/workflow/workflow-editor/index.tsx` |
+| 팔레트(컴포넌트 목록, 이름 입력, 배치 대기) | `workflow-editor/workflow-component-panel.tsx` |
+| 배치 고스트 / 컨트롤 바(포인터·핸드, 줌, undo/redo) | `workflow-placement-ghost.tsx` / `workflow-canvas-controls.tsx` |
+| 노드 카드·액션 메뉴 | `workflow-node-card.tsx`, `workflow-node-action-menu.tsx` |
+| 노드 기본값·ID | `workflow-node-defaults.ts` (`DEFAULT_LABEL`, `createNodeId`, `createWorkflowNodeData`) |
+| 설정 패널 라우팅 + 타입별 패널 | `workflow-setting-panel.tsx` → `start-setting.tsx`, `model-setting.tsx`, `knowledge-setting.tsx`, `end-setting.tsx` |
+| 캔버스 → 저장 정의 | `build-workflow-definition.ts` (`buildWorkflowDefinition(nodes, edges)`) |
+| 저장 정의 → 캔버스 | `workflow-to-flow.ts` (`workflowToFlow(workflow)`) |
+| 검증·저장·수정·템플릿 버튼 | `checklist-workflow-button.tsx`, `submit-workflow-button.tsx`, `update-workflow-button.tsx`, `create/update-workflow-template-button.tsx` |
+| 서버 오류 파싱 | `parse-workflow-error.ts` |
+| API 훅 | `src/hooks/service/workflows.ts` (`useCreateWorkflow`, `useUpdateWorkflow`, `useValidateWorkflow`, `useGetWorkflowStatus`(폴링), 템플릿·테스트 실행 훅) |
+| 타입 | `src/types/workflow.ts` (`WorkflowComponentType`, `WorkflowDefinition`, `WorkflowComponentDefinition` …) |
+| 페이지 | `src/pages/workflow/workflow/{create,[id],[id]/edit}/page.tsx`, `src/pages/workflow/templates/**`, 스타일 `workflow.module.scss` |
+| 테스트 헬퍼 | `src/test/utils/xyflow-stubs.ts`, `reset-workflow-store.ts`, E2E `e2e/smoke.spec.ts` |
+
+## 데이터 흐름
+
+1. 페이지가 서버 데이터(`useGetWorkflow`/`useGetWorkflowTemplate`)를 `workflowToFlow`로 `{ nodes, edges }`로 바꿔 `WorkflowEditor`에 넘긴다(`useMemo`).
+2. `FlowChart`가 `useEffect`에서 `setInitialData(nodes, edges)`로 스토어를 채운다. 이후 모든 변경은 스토어 액션.
+3. 저장 버튼은 스토어의 `nodes, edges`를 `buildWorkflowDefinition`으로 `WorkflowDefinition`으로 바꿔 `useCreateWorkflow`/`useUpdateWorkflow`에 넘긴다. 검증(`ChecklistWorkflowButton`)도 같은 정의로 `useValidateWorkflow`.
+4. 백엔드는 노드 위치를 **정수**로 저장한다. 변환기가 반올림한다. 숫자 설정값은 `toNumberOrUndefined`로 정리한다.
+
+변환은 이 두 파일에서만 한다. 다른 곳에서 정의 형태를 조립하지 않는다.
+
+## 스토어 (`useWorkflowStore`)
+
+- 상태: `name`, `nodes: WorkflowNode[]`, `edges`, `selectedNodeId`, `past`/`future`(undo 스냅샷, 최대 50), `isDragging`, `pendingNodeType`, `clipboard`.
+- 액션: `setInitialData`, `onNodesChange`/`onEdgesChange`/`onConnect`(xyflow 헬퍼 적용), `updateNodeData(nodeId, partial)`, `selectNode`, `copyNode`/`pasteClipboard`/`duplicateNode`(`CLONE_OFFSET` 40으로 비껴 배치), `deleteNode`/`deleteEdge`, `takeSnapshot`, `undo`/`redo`.
+- 사용자 조작 단위마다 `pushHistory`가 스냅샷을 남긴다. 새 액션을 추가하면 undo 대상인지 판단해 같은 규칙을 따른다.
+- 노드 데이터 타입은 `StartNodeData | KnowledgebaseNodeData | ModelNodeData | EndNodeData | NoteNodeData`(`[key: string]: unknown` 포함). 읽을 때는 좁혀서 쓴다.
+- 컴포넌트에서는 선택적 구독 `useWorkflowStore((s) => s.x)`. 이벤트 핸들러 안에서는 `useWorkflowStore.getState()`.
+- 스토어를 쓰는 테스트는 `beforeEach(() => resetWorkflowStore())`.
+
+## 캔버스 동작 (`flow-chart.tsx`)
+
+- `nodeTypes = { START, MODEL, KNOWLEDGE_BASE, END, NOTE }`. `NOTE`는 프론트 전용 메모 노드다(`WorkflowComponentType`에 없음). 저장 정의 변환 시 취급은 `build-workflow-definition.ts`를 따른다.
+- **배치는 클릭 방식**이다. 팔레트 버튼 클릭 → `setPendingNodeType(type)` → 캔버스 클릭 → `screenToFlowPosition` → `addNodes`. 같은 버튼을 다시 누르면 해제. `WorkflowPlacementGhost`가 커서를 따라간다. 드래그앤드롭 팔레트로 바꾸지 않는다.
+- 팬 모드 `PaneMode = 'pointer' | 'hand'`(컨트롤 바). 삭제는 `deleteKeyCode={['Backspace', 'Delete']}`, 읽기 전용이면 `null`.
+- 단축키 Ctrl/Cmd + C/D/V는 `input, textarea, [contenteditable]` 안에서는 무시한다. 새 단축키도 같은 가드를 쓴다.
+- 엣지 우클릭 컨텍스트 메뉴로 삭제. 노드 핸들은 `className="workflow-handle"`, 시작은 source만, 끝은 target만.
+- `fitView`는 초기 노드가 있을 때만 켠다. 빈 캔버스에서 켜면 요청이 큐에 남는다.
+- `readOnly` prop은 오버뷰(상세 페이지) 용도. 컨트롤 바를 숨기고 편집을 막는다.
+
+## 노드 설정 패널
+
+`WorkflowSettingPanel`이 `selectedNodeId`의 타입으로 `<Type>Setting`을 고른다. 각 패널은 `updateNodeData(nodeId, { ... })`로만 값을 바꾼다. 모델·지식베이스 선택은 `useGetCustomModels`/`useGetModelCatalogs`/`useGetKnowledgeBases` 훅(캔버스에서도 API는 훅으로). 숫자 필드(`temperature`, `top_p`, `max_tokens`, `top_k`)는 `type="number"` + `step` + `min`.
+
+## 노드 타입 추가 체크리스트
+
+1. `src/types/workflow.ts`: `WorkflowComponentType` 유니온(백엔드 타입과 일치), 정의 인터페이스에 config 필드.
+2. `useWorkflowStore.ts`: `XxxNodeData` 인터페이스 + `NodeData` 유니온.
+3. `workflow-node-defaults.ts`: `DEFAULT_LABEL`, `createWorkflowNodeData` 분기.
+4. `flow-chart.tsx`: 노드 컴포넌트(`memo`, `WorkflowNodeActionMenu`, `WorkflowNodeCard`, `Handle`) + `nodeTypes` 등록.
+5. `workflow-node-card.tsx`: 타입별 아이콘·색(`workflow/icons`).
+6. `workflow-setting-panel.tsx` + `xxx-setting.tsx`.
+7. `build-workflow-definition.ts`(`buildComponentConfig` 분기) / `workflow-to-flow.ts`(역변환).
+8. 팔레트는 `useGetWorkflowComponentTypes`가 서버에서 받으므로 프론트 등록은 라벨만.
+9. 테스트: `workflow-node-defaults.test.ts`, `build-workflow-definition.test.ts`, `workflow-to-flow.test.ts`, `useWorkflowStore.test.ts`, 설정 패널 테스트(`model-setting.test.tsx` 참고).
+
+## 테스트
+
+- 캔버스를 jsdom에 마운트하는 파일 최상단에서 `installXyflowStubs()`(ResizeObserver를 즉시 콜백하는 스텁으로 교체해 노드가 측정된 상태가 된다).
+- **드래그·엣지 연결·팬·줌은 jsdom으로 재현 불가.** 순수 함수(변환·기본값·스토어 액션)와 설정 패널은 vitest, 실브라우저 좌표가 필요한 여정은 `e2e/smoke.spec.ts`를 복제해 Playwright(`pnpm test:e2e`, 허메틱 `api-mocks.ts`에 엔드포인트 추가).
+- 팔레트 배치 버튼은 `sr-only '생성'` + `aria-pressed`로 접근한다. E2E 셀렉터는 `.react-flow__pane`, `.react-flow__node`, `.react-flow__handle.source/.target`.
 
 ## 체크리스트
 
-- [ ] ReactFlowProvider로 래핑
-- [ ] 커스텀 노드 타입 정의 및 구현
-- [ ] 노드 Handle 위치 및 스타일 설정
-- [ ] 드래그 앤 드롭 구현
-- [ ] 노드/엣지 이벤트 핸들러 추가
-- [ ] 저장/불러오기 API 연동
-- [ ] 노드 설정 패널 구현
-- [ ] 연결 검증 로직 추가
-- [ ] Undo/Redo 기능 (선택사항)
-- [ ] 자동 레이아웃 (선택사항)
-- [ ] TypeScript 타입 정의
-
-## 참고 자료
-
-- XyFlow 공식 문서: https://reactflow.dev/
-- 예제: https://reactflow.dev/examples
+- [ ] 상태 변경은 스토어 액션으로만, undo 스냅샷 규칙 유지
+- [ ] 정의 변환은 `build-workflow-definition.ts`/`workflow-to-flow.ts`에서만, 위치는 정수
+- [ ] 노드 타입 추가 시 위 9단계 모두 갱신
+- [ ] 토스트는 로컬 `useToast`, 서버 오류는 `parseWorkflowError`/`getServerErrorMessage`
+- [ ] 스토어 테스트에 `resetWorkflowStore`, 캔버스 마운트에 `installXyflowStubs`
+- [ ] 조작 여정을 바꿨으면 `pnpm test:e2e`
+- [ ] `pnpm typecheck` → `pnpm lint` → 관련 테스트 통과

@@ -10,12 +10,12 @@ import {
 import {
   CSP_OPTIONS,
   CspSelector,
-} from '@/components/features/infra-managememt/credentials/csp-selector';
-import { CredentialSelect } from '@/components/features/infra-managememt/provisioning/credential-select';
-import { CredentialCreateModal } from '@/components/features/infra-managememt/credentials/credential-create-modal';
-import { RegionSelect } from '@/components/features/infra-managememt/provisioning/region-select';
-import { SpecPicker } from '@/components/features/infra-managememt/provisioning/spec-picker';
-import { NodeComposition } from '@/components/features/infra-managememt/provisioning/node-composition';
+} from '@/components/features/infra-management/credentials/csp-selector';
+import { CredentialSelect } from '@/components/features/infra-management/provisioning/credential-select';
+import { CredentialCreateModal } from '@/components/features/infra-management/credentials/credential-create-modal';
+import { RegionSelect } from '@/components/features/infra-management/provisioning/region-select';
+import { SpecPicker } from '@/components/features/infra-management/provisioning/spec-picker';
+import { NodeComposition } from '@/components/features/infra-management/provisioning/node-composition';
 import { isGpuSpec } from '@/util/gpuInstance';
 import styles from '../../cluster-management/create/page.module.scss';
 

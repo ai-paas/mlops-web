@@ -2,6 +2,7 @@ import { useDeleteModel } from '@/hooks/service/models';
 import { AlertDialog, Button, useToast } from '@innogrid/ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { getServerErrorMessage } from '@/lib/api';
 
 export const DeleteCustomModelButton = ({
   customModelId,
@@ -23,11 +24,11 @@ export const DeleteCustomModelButton = ({
           navigate(redirect, { replace: true });
         }
       },
-      onError: () => {
+      onError: (error) => {
         toast.open({
           status: 'negative',
           title: '커스텀 모델 삭제 실패',
-          children: '커스텀 모델 삭제 중 오류가 발생했습니다.',
+          children: getServerErrorMessage(error, '커스텀 모델 삭제 중 오류가 발생했습니다.'),
         });
       },
     });

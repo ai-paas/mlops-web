@@ -12,7 +12,8 @@ import {
 } from '@/hooks/service/vms';
 import { formatDateTime } from '@/util/date';
 import type { VmNode } from '@/types/vm';
-import { WorkflowStepper } from '@/components/features/infra-managememt/provisioning/workflow-stepper';
+import { WorkflowStepper } from '@/components/features/infra-management/provisioning/workflow-stepper';
+import { LiveProgress } from '@/components/features/infra-management/provisioning/live-progress';
 import { DetailValue } from '@/components/ui/detail-value';
 
 const stateColor = (status?: string): 'run' | 'negative' | 'wait' => {
@@ -196,6 +197,10 @@ export default function VmDetailPage() {
         {(isPending || vm) && (
           <>
             <WorkflowStepper vm={vm} />
+            <LiveProgress
+              clusterName={vmName}
+              fallbackStep={vm?.currentSubStep ?? workflowStepLabel(vm?.currentWorkflowStep)}
+            />
             <div style={{ display: 'flex', gap: 24 }}>
               {/* 기본 정보 */}
               <div style={{ flex: 1 }}>

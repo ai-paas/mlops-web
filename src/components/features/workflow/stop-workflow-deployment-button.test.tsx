@@ -126,7 +126,7 @@ describe('StopWorkflowDeploymentButton', () => {
       }
     };
 
-    it('in_progress 동안 버튼이 비활성화되고, 3초 후 completed가 되면 무효화하고 모달을 닫는다', async () => {
+    it('in_progress 동안 버튼이 비활성화되고, 5초 후 completed가 되면 무효화하고 모달을 닫는다', async () => {
       let finalizeCallCount = 0;
       server.use(
         http.post(`${BASE_URL}/workflows/:id/finalize-cleanup`, () => {
@@ -152,8 +152,8 @@ describe('StopWorkflowDeploymentButton', () => {
       expect(screen.getByText(CONFIRM_MESSAGE)).toBeInTheDocument();
       expect(invalidateSpy).toHaveBeenCalledTimes(1);
 
-      // 3초 후 finalize 2회차(completed) → 완료 무효화(2회째) + 모달 닫힘 + 버튼 복구
-      await advance(3000);
+      // 5초 주기 뒤 finalize 2회차(completed) → 완료 무효화(2회째) + 모달 닫힘 + 버튼 복구
+      await advance(6000);
       expect(finalizeCallCount).toBeGreaterThanOrEqual(2);
       expect(invalidateSpy).toHaveBeenCalledTimes(2);
       expect(invalidateSpy).toHaveBeenLastCalledWith({ queryKey: queryKeys.workflows.all });
@@ -162,6 +162,42 @@ describe('StopWorkflowDeploymentButton', () => {
       expect(toastOpenSpy).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'positive', title: '배포 중지 성공' })
       );
+    });
+
+    // 10분을 넘겨도 하드 실패로 처리하지 않는다 — 안내 + 목록 갱신
+    it('in_progress가 10분을 넘기면 실패가 아니라 진행 중 안내로 끝내고 잠금을 푼다', async () => {
+      server.use(
+        http.post(`${BASE_URL}/workflows/:id/finalize-cleanup`, () =>
+          HttpResponse.json({ workflow_id: 'wf-001', status: 'in_progress' })
+        )
+      );
+
+      const { queryClient } = render(<StopWorkflowDeploymentButton workflowId="wf-001" />);
+      const invalidateSpy = spyInvalidate(queryClient);
+
+      fireEvent.click(screen.getByRole('button', { name: '배포 중지' }));
+      fireEvent.click(screen.getByRole('button', { name: '확인' }));
+
+      await advance(0);
+      expect(screen.getByRole('button', { name: '배포 중지' })).toBeDisabled();
+
+      // 응답을 흘리지 않고 시계만 10분 넘긴다(삭제 버튼 상한 테스트와 같은 방식)
+      await act(async () => {
+        vi.advanceTimersByTime(10 * 60 * 1000);
+      });
+      await advance(0);
+
+      expect(toastOpenSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'issue', title: '배포 중지 진행 중' })
+      );
+      expect(toastOpenSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ title: '배포 중지 성공' })
+      );
+      expect(toastOpenSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ title: '배포 중지 실패' })
+      );
+      expect(invalidateSpy).toHaveBeenLastCalledWith({ queryKey: queryKeys.workflows.all });
+      expect(screen.getByRole('button', { name: '배포 중지' })).toBeEnabled();
     });
   });
 

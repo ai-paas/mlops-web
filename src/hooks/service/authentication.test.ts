@@ -29,6 +29,32 @@ describe('useLogout', () => {
     expect(authHeader).toBe('Bearer test-token');
   });
 
+  it('액세스 토큰이 만료(401)돼도 refresh 후 새 토큰으로 재시도해 서버 무효화를 완료한다', async () => {
+    // 장시간 대기 후 로그아웃하는 시나리오 — 여기서 401로 끝나면 리프레시 토큰이 살아남아
+    // 새로고침 시 자동 재로그인된다(로그아웃 무력화). useLogout이 raw fetch가 아닌 ky를 쓰는 이유.
+    const authHeaders: (string | null)[] = [];
+    server.use(
+      http.post(`${BASE_URL}/auth/logout`, ({ request }) => {
+        const authHeader = request.headers.get('Authorization');
+        authHeaders.push(authHeader);
+        if (authHeader === 'Bearer expired-token') {
+          return HttpResponse.json({ detail: 'Token expired' }, { status: 401 });
+        }
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+    setAccessToken('expired-token');
+
+    const { result } = renderHook(() => useLogout(), { wrapper });
+    result.current.mutate();
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+    // 만료 토큰으로 1회 → refresh(기본 핸들러가 test-access-token 발급) → 새 토큰으로 재시도
+    expect(authHeaders).toEqual(['Bearer expired-token', 'Bearer test-access-token']);
+  });
+
   it('서버 에러 시 isError 가 true 가 된다', async () => {
     server.use(
       http.post(`${BASE_URL}/auth/logout`, () =>

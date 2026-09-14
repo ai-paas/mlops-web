@@ -14,6 +14,8 @@ import {
 import { useNavigate } from 'react-router';
 import { IconArrCount, IconDocument } from '../../../assets/img/icon';
 import { useState } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
   useCreateKnowledgeBase,
   useGetChunkTypes,
@@ -27,56 +29,61 @@ import {
   KNOWLEDGE_BASE_DEFAULTS,
   KNOWLEDGE_BASE_FILE_EXTENSIONS,
   KNOWLEDGE_BASE_LIMITS,
+  KNOWLEDGE_BASE_STEP_FIELDS,
   VERIFIED_EMBEDDING_MODEL_IDS,
   buildKnowledgeBaseCreatePayload,
   createInitialKnowledgeBaseFormValues,
-  getFirstKnowledgeBaseFormError,
   getKnowledgeBaseCreateErrorMessage,
-  validateKnowledgeBaseForm,
-  type KnowledgeBaseFormErrors,
-  type KnowledgeBaseFormField,
+  knowledgeBaseFormSchema,
   type KnowledgeBaseFormValues,
 } from './knowledge-base-form';
+
+type KnowledgeBaseFormField = keyof KnowledgeBaseFormValues;
+
+// 폼 타입은 resolver에서 추론시킨다 — useForm에 제네릭을 직접 주면 TTransformedValues가 맞지 않아
+// Control을 하위 컴포넌트로 넘길 때 타입이 어긋난다.
+const useKnowledgeBaseForm = () =>
+  useForm({
+    resolver: zodResolver(knowledgeBaseFormSchema),
+    defaultValues: createInitialKnowledgeBaseFormValues(),
+    // 입력 중에는 검증하지 않고 단계 이동·생성 시점(trigger/handleSubmit)에만 검증한다.
+    // 입력을 고치는 즉시 그 필드의 에러만 지운다(각 Controller의 clearErrors).
+    mode: 'onSubmit',
+  });
+
+interface StepProps {
+  form: ReturnType<typeof useKnowledgeBaseForm>;
+}
 
 export default function KnowledgeBaseCreatePage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [step, setStep] = useState<number>(0);
   const { createKnowledgeBase, isPending } = useCreateKnowledgeBase();
-  const [formData, setFormData] = useState<KnowledgeBaseFormValues>(
-    createInitialKnowledgeBaseFormValues
-  );
-  const [errors, setErrors] = useState<KnowledgeBaseFormErrors>({});
+  const form = useKnowledgeBaseForm();
+  const { trigger, handleSubmit, getFieldState, getValues } = form;
 
-  const clearError = (field: KnowledgeBaseFormField) => {
-    setErrors((previous) => {
-      if (!previous[field]) return previous;
-      const next = { ...previous };
-      delete next[field];
-      return next;
-    });
+  // 검증 실패 시 첫 에러를 토스트로 알린다 — 필드 옆 인라인 표시는 각 Controller가 맡는다
+  const toastFirstError = (fields: readonly KnowledgeBaseFormField[]) => {
+    const message = fields
+      .map((field) => getFieldState(field).error?.message)
+      .find((candidate): candidate is string => Boolean(candidate));
+    if (!message) return;
+
+    toast.open({ status: 'negative', title: '입력값을 확인해주세요.', children: message });
   };
 
-  const showValidationErrors = (nextErrors: KnowledgeBaseFormErrors) => {
-    const message = getFirstKnowledgeBaseFormError(nextErrors);
-    setErrors(nextErrors);
-    if (!message) return false;
-
-    toast.open({
-      status: 'negative',
-      title: '입력값을 확인해주세요.',
-      children: message,
-    });
-    return true;
-  };
-
-  const handleClickNext = () => {
+  const handleClickNext = async () => {
     if (step >= 2) return;
 
-    const nextErrors = validateKnowledgeBaseForm(formData, step === 0 ? 'basic' : 'embedding');
-    if (showValidationErrors(nextErrors)) return;
+    const fields =
+      step === 0 ? KNOWLEDGE_BASE_STEP_FIELDS.basic : KNOWLEDGE_BASE_STEP_FIELDS.embedding;
+    const isValid = await trigger(fields);
+    if (!isValid) {
+      toastFirstError(fields);
+      return;
+    }
 
-    setErrors({});
     setStep((prev) => prev + 1);
   };
 
@@ -84,38 +91,40 @@ export default function KnowledgeBaseCreatePage() {
     if (step !== 0) setStep((prev) => prev - 1);
   };
 
-  const handleClickCreate = async () => {
-    const nextErrors = validateKnowledgeBaseForm(formData, 'all');
-    if (showValidationErrors(nextErrors)) {
-      const basicFields: KnowledgeBaseFormField[] = ['name', 'description', 'file'];
-      const hasBasicError = basicFields.some((field) => nextErrors[field]);
+  const handleClickCreate = handleSubmit(
+    async (values) => {
+      try {
+        const created = await createKnowledgeBase(buildKnowledgeBaseCreatePayload(values));
+        toast.open({
+          status: 'positive',
+          title: '지식 베이스 생성 성공',
+          children: '지식 베이스가 성공적으로 생성되었습니다.',
+        });
+        navigate(`/knowledge-base/${created.surro_knowledge_id}`);
+      } catch (error) {
+        toast.open({
+          status: 'negative',
+          title: '지식 베이스 생성 실패',
+          children: (
+            <>
+              {getKnowledgeBaseCreateErrorMessage(error)}
+              <br />
+              다시 시도하면 파일이 다시 업로드됩니다.
+            </>
+          ),
+        });
+      }
+    },
+    (fieldErrors) => {
+      // 에러가 있는 단계로 되돌린다 — 기본 설정 에러가 우선
+      toastFirstError([
+        ...KNOWLEDGE_BASE_STEP_FIELDS.basic,
+        ...KNOWLEDGE_BASE_STEP_FIELDS.embedding,
+      ]);
+      const hasBasicError = KNOWLEDGE_BASE_STEP_FIELDS.basic.some((field) => fieldErrors[field]);
       setStep(hasBasicError ? 0 : 1);
-      return;
     }
-
-    setErrors({});
-    try {
-      const created = await createKnowledgeBase(buildKnowledgeBaseCreatePayload(formData));
-      toast.open({
-        status: 'positive',
-        title: '지식 베이스 생성 성공',
-        children: '지식 베이스가 성공적으로 생성되었습니다.',
-      });
-      navigate(`/knowledge-base/${created.surro_knowledge_id}`);
-    } catch (error) {
-      toast.open({
-        status: 'negative',
-        title: '지식 베이스 생성 실패',
-        children: (
-          <>
-            {getKnowledgeBaseCreateErrorMessage(error)}
-            <br />
-            다시 시도하면 파일이 다시 업로드됩니다.
-          </>
-        ),
-      });
-    }
-  };
+  );
 
   return (
     <main>
@@ -136,23 +145,9 @@ export default function KnowledgeBaseCreatePage() {
           />
         </div>
         <div className="page-content-stepper-desc">
-          {step === 0 && (
-            <Step1
-              formData={formData}
-              setFormData={setFormData}
-              errors={errors}
-              clearError={clearError}
-            />
-          )}
-          {step === 1 && (
-            <Step2
-              formData={formData}
-              setFormData={setFormData}
-              errors={errors}
-              clearError={clearError}
-            />
-          )}
-          {step === 2 && <Step3 formData={formData} />}
+          {step === 0 && <Step1 form={form} />}
+          {step === 1 && <Step2 form={form} />}
+          {step === 2 && <Step3 values={getValues()} />}
           {step === 2 && isPending && (
             <div
               className="mx-10 mb-10 rounded-lg border border-[#d9dee8] bg-[#f7f9fc] p-5"
@@ -218,24 +213,9 @@ export default function KnowledgeBaseCreatePage() {
   );
 }
 
-interface Step1Props {
-  formData: KnowledgeBaseFormValues;
-  setFormData: React.Dispatch<React.SetStateAction<KnowledgeBaseFormValues>>;
-  errors: KnowledgeBaseFormErrors;
-  clearError: (field: KnowledgeBaseFormField) => void;
-}
-
-const Step1 = ({ formData, setFormData, errors, clearError }: Step1Props) => {
+const Step1 = ({ form }: StepProps) => {
+  const { control, clearErrors } = form;
   const toast = useToast();
-
-  const handleAddFile = (files: File[]) => {
-    setFormData((prev) => ({ ...prev, file: files[0] ?? null }));
-    clearError('file');
-  };
-
-  const handleDeleteFile = () => {
-    setFormData((prev) => ({ ...prev, file: null }));
-  };
 
   return (
     <div className="page-content page-pb-40">
@@ -244,29 +224,45 @@ const Step1 = ({ formData, setFormData, errors, clearError }: Step1Props) => {
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">이름</div>
           <div className="page-input_item-data">
-            <Input
-              placeholder="이름을 입력해주세요."
-              value={formData.name}
-              errMessage={errors.name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setFormData((prev) => ({ ...prev, name: e.target.value }));
-                clearError('name');
-              }}
+            <Controller
+              control={control}
+              name="name"
+              render={({ field, fieldState }) => (
+                <>
+                  <Input
+                    placeholder="이름을 입력해주세요."
+                    value={field.value}
+                    errMessage={fieldState.error?.message}
+                    onBlur={field.onBlur}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      field.onChange(e.target.value);
+                      clearErrors('name');
+                    }}
+                  />
+                  {!fieldState.error && (
+                    <p className="page-input_item-input-desc">지식 베이스 이름을 입력해주세요.</p>
+                  )}
+                </>
+              )}
             />
-            {!errors.name && (
-              <p className="page-input_item-input-desc">지식 베이스 이름을 입력해주세요.</p>
-            )}
           </div>
         </div>
         <div className="page-input_item-box">
           <div className="page-input_item-name">설명</div>
           <div className="page-input_item-data">
-            <Textarea
-              value={formData.description}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                setFormData((prev) => ({ ...prev, description: e.target.value }))
-              }
-              placeholder="설명을 입력해주세요."
+            <Controller
+              control={control}
+              name="description"
+              render={({ field }) => (
+                <Textarea
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    field.onChange(e.target.value)
+                  }
+                  placeholder="설명을 입력해주세요."
+                />
+              )}
             />
           </div>
         </div>
@@ -274,35 +270,48 @@ const Step1 = ({ formData, setFormData, errors, clearError }: Step1Props) => {
           <div className="page-input_item-name page-icon-requisite">파일</div>
           <div className="page-input_item-data">
             <div className="page-input_item-data_fileUpload">
-              <FileDrop
-                id="knowledge-base-file"
-                extensions={[...KNOWLEDGE_BASE_FILE_EXTENSIONS]}
-                description={
+              <Controller
+                control={control}
+                name="file"
+                render={({ field, fieldState }) => (
                   <>
-                    파일을 여기에 드래그하거나 클릭하여 업로드하세요.
-                    <br />
-                    허용되는 파일 형식: pdf, doc, docx, xls, xlsx, ppt, pptx, csv
+                    <FileDrop
+                      id="knowledge-base-file"
+                      extensions={[...KNOWLEDGE_BASE_FILE_EXTENSIONS]}
+                      description={
+                        <>
+                          파일을 여기에 드래그하거나 클릭하여 업로드하세요.
+                          <br />
+                          허용되는 파일 형식: pdf, doc, docx, xls, xlsx, ppt, pptx, csv
+                        </>
+                      }
+                      files={field.value ? [field.value] : []}
+                      onAddFile={(files: File[]) => {
+                        field.onChange(files[0] ?? null);
+                        clearErrors('file');
+                      }}
+                      onDeleteFile={() => field.onChange(null)}
+                      onError={({ errorMessage }) =>
+                        toast.open({
+                          status: 'negative',
+                          title: '파일 업로드 실패',
+                          children: errorMessage,
+                        })
+                      }
+                    />
+                    {fieldState.error ? (
+                      <p className="mt-1 text-xs leading-normal text-[#dc4646]">
+                        {fieldState.error.message}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs leading-5 text-[#667085]">
+                        대용량 파일은 업로드·임베딩에 수 분 이상 걸릴 수 있으며, 서버 처리 실패 시
+                        다시 업로드해야 할 수 있습니다.
+                      </p>
+                    )}
                   </>
-                }
-                files={formData.file ? [formData.file] : []}
-                onAddFile={handleAddFile}
-                onDeleteFile={handleDeleteFile}
-                onError={({ errorMessage }) =>
-                  toast.open({
-                    status: 'negative',
-                    title: '파일 업로드 실패',
-                    children: errorMessage,
-                  })
-                }
+                )}
               />
-              {errors.file ? (
-                <p className="mt-1 text-xs leading-normal text-[#dc4646]">{errors.file}</p>
-              ) : (
-                <p className="mt-2 text-xs leading-5 text-[#667085]">
-                  대용량 파일은 업로드·임베딩에 수 분 이상 걸릴 수 있으며, 서버 처리 실패 시 다시
-                  업로드해야 할 수 있습니다.
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -311,31 +320,93 @@ const Step1 = ({ formData, setFormData, errors, clearError }: Step1Props) => {
   );
 };
 
-interface Step2Props {
-  formData: KnowledgeBaseFormValues;
-  setFormData: React.Dispatch<React.SetStateAction<KnowledgeBaseFormValues>>;
-  errors: KnowledgeBaseFormErrors;
-  clearError: (field: KnowledgeBaseFormField) => void;
-}
-
 const parseNumericInput = (value: string) => (value === '' ? Number.NaN : Number(value));
 const displayNumericInput = (value: number) => (Number.isFinite(value) ? String(value) : '');
-const roundToOneDecimal = (value: number) => Math.round(value * 10) / 10;
 const getSliderValue = (value: number, fallback: number, min: number, max: number) =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : fallback));
 
-const Step2 = ({ formData, setFormData, errors, clearError }: Step2Props) => {
+interface SliderNumberFieldProps {
+  value: number;
+  fallback: number;
+  min: number;
+  max: number;
+  step: number;
+  placeholder: string;
+  onChange: (value: number) => void;
+}
+
+// 슬라이더 + 숫자 입력 + 증감 버튼이 한 값을 공유하는 입력 묶음 (Top K, 점수 임계값)
+const SliderNumberField = ({
+  value,
+  fallback,
+  min,
+  max,
+  step,
+  placeholder,
+  onChange,
+}: SliderNumberFieldProps) => {
+  // 0.1 단위 증감의 부동소수 오차(0.30000000000000004)를 step 자릿수로 정리한다
+  const decimals = step < 1 ? 1 : 0;
+  const clamp = (next: number) => Number(Math.min(max, Math.max(min, next)).toFixed(decimals));
+  // 값이 비어 있으면(NaN) 증감 버튼은 최소값에서 시작한다
+  const stepUp = () => onChange(clamp((Number.isFinite(value) ? value : min - step) + step));
+  const stepDown = () => onChange(clamp((Number.isFinite(value) ? value : min + step) - step));
+
+  return (
+    <div className="page-input_item-row2">
+      <div className="w-54">
+        <Slider
+          step={step}
+          min={min}
+          max={max}
+          value={[getSliderValue(value, fallback, min, max)]}
+          onValueChange={(next) => onChange(next[0] ?? value)}
+        />
+      </div>
+      <div className="page-num-count">
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          placeholder={placeholder}
+          value={displayNumericInput(value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            onChange(parseNumericInput(e.target.value))
+          }
+        />
+        <div className="page-num-count-control">
+          <button type="button" className="btn-num" onClick={stepUp}>
+            <span className="icon-arr icon-arrUp">
+              <IconArrCount />
+            </span>
+          </button>
+          <button type="button" className="btn-num" onClick={stepDown}>
+            <span className="icon-arr icon-arrDown">
+              <IconArrCount />
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Step2 = ({ form }: StepProps) => {
+  const { control, clearErrors } = form;
   const { chunkTypes } = useGetChunkTypes();
   const { languages } = useGetLanguages();
   const { searchMethods } = useGetSearchMethods();
   const { modelTypes } = useGetModelTypes({ type_name: 'Embedding' });
   const { models } = useGetModels(
-    { page: 1, size: 999, model_type_id: modelTypes[0]?.id },
+    { page: 1, size: 100, model_type_id: modelTypes[0]?.id },
     { enabled: !!modelTypes.length }
   );
   const verifiedModels = models.filter((model) =>
     VERIFIED_EMBEDDING_MODEL_IDS.includes(model.id as (typeof VERIFIED_EMBEDDING_MODEL_IDS)[number])
   );
+  // 청크 중첩의 상한은 청크 길이에 따라 움직인다
+  const chunkSize = useWatch({ control, name: 'chunk_size' });
 
   return (
     <div className="page-content page-pb-40">
@@ -344,76 +415,90 @@ const Step2 = ({ formData, setFormData, errors, clearError }: Step2Props) => {
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">청크 길이</div>
           <div className="page-input_item-data">
-            <Input
-              type="number"
-              placeholder="청크 길이를 입력해주세요."
-              min={KNOWLEDGE_BASE_LIMITS.chunkSize.min}
-              max={KNOWLEDGE_BASE_LIMITS.chunkSize.max}
-              step={1}
-              value={displayNumericInput(formData.chunk_size)}
-              errMessage={errors.chunk_size}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setFormData((prev) => ({
-                  ...prev,
-                  chunk_size: parseNumericInput(e.target.value),
-                }));
-                clearError('chunk_size');
-              }}
+            <Controller
+              control={control}
+              name="chunk_size"
+              render={({ field, fieldState }) => (
+                <>
+                  <Input
+                    type="number"
+                    placeholder="청크 길이를 입력해주세요."
+                    min={KNOWLEDGE_BASE_LIMITS.chunkSize.min}
+                    max={KNOWLEDGE_BASE_LIMITS.chunkSize.max}
+                    step={1}
+                    value={displayNumericInput(field.value)}
+                    errMessage={fieldState.error?.message}
+                    onBlur={field.onBlur}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      field.onChange(parseNumericInput(e.target.value));
+                      clearErrors('chunk_size');
+                    }}
+                  />
+                  {!fieldState.error && (
+                    <p className="page-input_item-input-desc">
+                      300~1,000자 범위에서 500자를 권장합니다.
+                    </p>
+                  )}
+                </>
+              )}
             />
-            {!errors.chunk_size && (
-              <p className="page-input_item-input-desc">300~1,000자 범위에서 500자를 권장합니다.</p>
-            )}
           </div>
         </div>
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">청크 중첩</div>
           <div className="page-input_item-data">
-            <Input
-              type="number"
-              placeholder="청크 중첩을 입력해주세요."
-              min={0}
-              max={
-                Number.isFinite(formData.chunk_size)
-                  ? Math.max(0, formData.chunk_size - 1)
-                  : undefined
-              }
-              step={1}
-              value={displayNumericInput(formData.chunk_overlap)}
-              errMessage={errors.chunk_overlap}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setFormData((prev) => ({
-                  ...prev,
-                  chunk_overlap: parseNumericInput(e.target.value),
-                }));
-                clearError('chunk_overlap');
-              }}
+            <Controller
+              control={control}
+              name="chunk_overlap"
+              render={({ field, fieldState }) => (
+                <>
+                  <Input
+                    type="number"
+                    placeholder="청크 중첩을 입력해주세요."
+                    min={0}
+                    max={Number.isFinite(chunkSize) ? Math.max(0, chunkSize - 1) : undefined}
+                    step={1}
+                    value={displayNumericInput(field.value)}
+                    errMessage={fieldState.error?.message}
+                    onBlur={field.onBlur}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      field.onChange(parseNumericInput(e.target.value));
+                      clearErrors('chunk_overlap');
+                    }}
+                  />
+                  {!fieldState.error && (
+                    <p className="page-input_item-input-desc">
+                      청크 길이보다 작아야 하며, 청크 길이의 10~20%를 권장합니다.
+                    </p>
+                  )}
+                </>
+              )}
             />
-            {!errors.chunk_overlap && (
-              <p className="page-input_item-input-desc">
-                청크 길이보다 작아야 하며, 청크 길이의 10~20%를 권장합니다.
-              </p>
-            )}
           </div>
         </div>
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">청크 타입</div>
           <div className="page-input_item-data">
-            <Select
-              classNames={{ container: () => 'page-input_item-data_select' }}
-              options={chunkTypes}
-              getOptionLabel={(option: ChunkType) => option.name}
-              getOptionValue={(option: ChunkType) => option.id.toString()}
-              value={
-                chunkTypes.find((type: ChunkType) => type.id === formData.chunk_type.id) ?? null
-              }
-              isError={!!errors.chunk_type}
-              errMessage={errors.chunk_type}
-              onChange={(option: ChunkType | null) => {
-                if (option) {
-                  setFormData((prev) => ({ ...prev, chunk_type: option }));
-                  clearError('chunk_type');
-                }
-              }}
+            <Controller
+              control={control}
+              name="chunk_type"
+              render={({ field, fieldState }) => (
+                <Select
+                  classNames={{ container: () => 'page-input_item-data_select' }}
+                  options={chunkTypes}
+                  getOptionLabel={(option: ChunkType) => option.name}
+                  getOptionValue={(option: ChunkType) => option.id.toString()}
+                  value={chunkTypes.find((type: ChunkType) => type.id === field.value.id) ?? null}
+                  isError={!!fieldState.error}
+                  errMessage={fieldState.error?.message}
+                  onChange={(option: ChunkType | null) => {
+                    if (option) {
+                      field.onChange(option);
+                      clearErrors('chunk_type');
+                    }
+                  }}
+                />
+              )}
             />
           </div>
         </div>
@@ -421,25 +506,37 @@ const Step2 = ({ formData, setFormData, errors, clearError }: Step2Props) => {
           <div className="page-input_item-name page-icon-requisite">언어</div>
           <div className="page-input_item-data">
             <div className="page-input_item-col2">
-              <RadioGroupButton
-                id="language"
-                options={languages.map((lang) => ({
-                  label: lang.description,
-                  value: String(lang.id),
-                }))}
-                orientation="vertical"
-                value={String(formData.language.id)}
-                onValueChange={(languageId: string) => {
-                  const selectedLanguage = languages.find((lang) => lang.id === Number(languageId));
-                  if (selectedLanguage) {
-                    setFormData((prev) => ({ ...prev, language: selectedLanguage }));
-                    clearError('language');
-                  }
-                }}
+              <Controller
+                control={control}
+                name="language"
+                render={({ field, fieldState }) => (
+                  <>
+                    <RadioGroupButton
+                      id="language"
+                      options={languages.map((lang) => ({
+                        label: lang.description,
+                        value: String(lang.id),
+                      }))}
+                      orientation="vertical"
+                      value={String(field.value.id)}
+                      onValueChange={(languageId: string) => {
+                        const selectedLanguage = languages.find(
+                          (lang) => lang.id === Number(languageId)
+                        );
+                        if (selectedLanguage) {
+                          field.onChange(selectedLanguage);
+                          clearErrors('language');
+                        }
+                      }}
+                    />
+                    {fieldState.error && (
+                      <p className="mt-1 text-xs leading-normal text-[#dc4646]">
+                        {fieldState.error.message}
+                      </p>
+                    )}
+                  </>
+                )}
               />
-              {errors.language && (
-                <p className="mt-1 text-xs leading-normal text-[#dc4646]">{errors.language}</p>
-              )}
             </div>
           </div>
         </div>
@@ -449,30 +546,37 @@ const Step2 = ({ formData, setFormData, errors, clearError }: Step2Props) => {
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">임베딩 모델</div>
           <div className="page-input_item-data">
-            <Select
-              classNames={{ container: () => 'page-input_item-data_select' }}
-              options={verifiedModels}
-              getOptionLabel={(option: Model) => option.name}
-              getOptionValue={(option: Model) => option.id.toString()}
-              value={
-                verifiedModels.find((model: Model) => model.id === formData.embedding_model.id) ??
-                null
-              }
-              isDisabled={verifiedModels.length <= 1}
-              isError={!!errors.embedding_model}
-              errMessage={errors.embedding_model}
-              onChange={(option: Model | null) => {
-                if (option) {
-                  setFormData((prev) => ({ ...prev, embedding_model: option }));
-                  clearError('embedding_model');
-                }
-              }}
+            <Controller
+              control={control}
+              name="embedding_model"
+              render={({ field, fieldState }) => (
+                <>
+                  <Select
+                    classNames={{ container: () => 'page-input_item-data_select' }}
+                    options={verifiedModels}
+                    getOptionLabel={(option: Model) => option.name}
+                    getOptionValue={(option: Model) => option.id.toString()}
+                    value={
+                      verifiedModels.find((model: Model) => model.id === field.value.id) ?? null
+                    }
+                    isDisabled={verifiedModels.length === 0}
+                    isError={!!fieldState.error}
+                    errMessage={fieldState.error?.message}
+                    onChange={(option: Model | null) => {
+                      if (option) {
+                        field.onChange(option);
+                        clearErrors('embedding_model');
+                      }
+                    }}
+                  />
+                  {!fieldState.error && (
+                    <p className="page-input_item-input-desc">
+                      현재 배포가 확인된 bge-m3 모델만 사용할 수 있습니다.
+                    </p>
+                  )}
+                </>
+              )}
             />
-            {!errors.embedding_model && (
-              <p className="page-input_item-input-desc">
-                현재 배포가 확인된 bge-m3 모델만 사용할 수 있습니다.
-              </p>
-            )}
           </div>
         </div>
       </div>
@@ -481,210 +585,96 @@ const Step2 = ({ formData, setFormData, errors, clearError }: Step2Props) => {
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">검색 타입</div>
           <div className="page-input_item-data">
-            <Select
-              classNames={{ container: () => 'page-input_item-data_select' }}
-              options={searchMethods}
-              getOptionLabel={(option: SearchMethod) => option.name}
-              getOptionValue={(option: SearchMethod) => option.id.toString()}
-              value={
-                searchMethods.find(
-                  (method: SearchMethod) => method.id === formData.search_method.id
-                ) ?? null
-              }
-              isError={!!errors.search_method}
-              errMessage={errors.search_method}
-              onChange={(option: SearchMethod | null) => {
-                if (option) {
-                  setFormData((prev) => ({ ...prev, search_method: option }));
-                  clearError('search_method');
-                }
-              }}
+            <Controller
+              control={control}
+              name="search_method"
+              render={({ field, fieldState }) => (
+                <Select
+                  classNames={{ container: () => 'page-input_item-data_select' }}
+                  options={searchMethods}
+                  getOptionLabel={(option: SearchMethod) => option.name}
+                  getOptionValue={(option: SearchMethod) => option.id.toString()}
+                  value={
+                    searchMethods.find((method: SearchMethod) => method.id === field.value.id) ??
+                    null
+                  }
+                  isError={!!fieldState.error}
+                  errMessage={fieldState.error?.message}
+                  onChange={(option: SearchMethod | null) => {
+                    if (option) {
+                      field.onChange(option);
+                      clearErrors('search_method');
+                    }
+                  }}
+                />
+              )}
             />
           </div>
         </div>
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">Top K</div>
           <div className="page-input_item-data">
-            <div className="page-input_item-row2">
-              {/* 게이지 드래그시 gaugeActionBar 필요 */}
-              <div className="w-54">
-                <Slider
-                  step={1}
-                  min={KNOWLEDGE_BASE_LIMITS.topK.min}
-                  max={KNOWLEDGE_BASE_LIMITS.topK.max}
-                  value={[
-                    getSliderValue(
-                      formData.top_k,
-                      KNOWLEDGE_BASE_DEFAULTS.topK,
-                      KNOWLEDGE_BASE_LIMITS.topK.min,
-                      KNOWLEDGE_BASE_LIMITS.topK.max
-                    ),
-                  ]}
-                  onValueChange={(value) => {
-                    setFormData((prev) => ({ ...prev, top_k: value[0] ?? prev.top_k }));
-                    clearError('top_k');
-                  }}
-                />
-              </div>
-              {/* numCount disabled 일때 클래스네임 disabled 추가 */}
-              <div className="page-num-count">
-                <input
-                  type="number"
-                  min={KNOWLEDGE_BASE_LIMITS.topK.min}
-                  max={KNOWLEDGE_BASE_LIMITS.topK.max}
-                  step={1}
-                  placeholder="3"
-                  value={displayNumericInput(formData.top_k)}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      top_k: parseNumericInput(e.target.value),
-                    }));
-                    clearError('top_k');
-                  }}
-                />
-                <div className="page-num-count-control">
-                  <button
-                    type="button"
-                    className="btn-num"
-                    onClick={() => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        top_k: Math.min(
-                          KNOWLEDGE_BASE_LIMITS.topK.max,
-                          (Number.isFinite(prev.top_k) ? prev.top_k : 0) + 1
-                        ),
-                      }));
-                      clearError('top_k');
+            <Controller
+              control={control}
+              name="top_k"
+              render={({ field, fieldState }) => (
+                <>
+                  <SliderNumberField
+                    value={field.value}
+                    fallback={KNOWLEDGE_BASE_DEFAULTS.topK}
+                    min={KNOWLEDGE_BASE_LIMITS.topK.min}
+                    max={KNOWLEDGE_BASE_LIMITS.topK.max}
+                    step={1}
+                    placeholder="3"
+                    onChange={(value) => {
+                      field.onChange(value);
+                      clearErrors('top_k');
                     }}
-                  >
-                    <span className="icon-arr icon-arrUp">
-                      <IconArrCount />
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-num"
-                    onClick={() => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        top_k: Math.max(
-                          KNOWLEDGE_BASE_LIMITS.topK.min,
-                          (Number.isFinite(prev.top_k) ? prev.top_k : 2) - 1
-                        ),
-                      }));
-                      clearError('top_k');
-                    }}
-                  >
-                    <span className="icon-arr icon-arrDown">
-                      <IconArrCount />
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-            {errors.top_k ? (
-              <p className="mt-1 text-xs leading-normal text-[#dc4646]">{errors.top_k}</p>
-            ) : (
-              <p className="page-input_item-input-desc">1~20 범위에서 3~5를 권장합니다.</p>
-            )}
+                  />
+                  {fieldState.error ? (
+                    <p className="mt-1 text-xs leading-normal text-[#dc4646]">
+                      {fieldState.error.message}
+                    </p>
+                  ) : (
+                    <p className="page-input_item-input-desc">1~20 범위에서 3~5를 권장합니다.</p>
+                  )}
+                </>
+              )}
+            />
           </div>
         </div>
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">점수 임계값</div>
           <div className="page-input_item-data">
-            <div className="page-input_item-row2">
-              {/* 게이지 드래그시 gaugeActionBar 필요 */}
-              <div className="w-54">
-                <Slider
-                  step={0.1}
-                  min={0}
-                  max={1}
-                  value={[
-                    getSliderValue(
-                      formData.threshold,
-                      KNOWLEDGE_BASE_DEFAULTS.threshold,
-                      KNOWLEDGE_BASE_LIMITS.threshold.min,
-                      KNOWLEDGE_BASE_LIMITS.threshold.max
-                    ),
-                  ]}
-                  onValueChange={(value) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      threshold: value[0] ?? prev.threshold,
-                    }));
-                    clearError('threshold');
-                  }}
-                />
-              </div>
-              {/* numCount disabled 일때 클래스네임 disabled 추가 */}
-              <div className="page-num-count">
-                <input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  value={displayNumericInput(formData.threshold)}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      threshold: parseNumericInput(e.target.value),
-                    }));
-                    clearError('threshold');
-                  }}
-                />
-                <div className="page-num-count-control">
-                  <button
-                    type="button"
-                    className="btn-num"
-                    onClick={() => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        threshold: Math.min(
-                          1,
-                          roundToOneDecimal(
-                            (Number.isFinite(prev.threshold) ? prev.threshold : 0) + 0.1
-                          )
-                        ),
-                      }));
-                      clearError('threshold');
+            <Controller
+              control={control}
+              name="threshold"
+              render={({ field, fieldState }) => (
+                <>
+                  <SliderNumberField
+                    value={field.value}
+                    fallback={KNOWLEDGE_BASE_DEFAULTS.threshold}
+                    min={KNOWLEDGE_BASE_LIMITS.threshold.min}
+                    max={KNOWLEDGE_BASE_LIMITS.threshold.max}
+                    step={0.1}
+                    placeholder="0"
+                    onChange={(value) => {
+                      field.onChange(value);
+                      clearErrors('threshold');
                     }}
-                  >
-                    <span className="icon-arr icon-arrUp">
-                      <IconArrCount />
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-num"
-                    onClick={() => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        threshold: Math.max(
-                          0,
-                          roundToOneDecimal(
-                            (Number.isFinite(prev.threshold) ? prev.threshold : 0.1) - 0.1
-                          )
-                        ),
-                      }));
-                      clearError('threshold');
-                    }}
-                  >
-                    <span className="icon-arr icon-arrDown">
-                      <IconArrCount />
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-            {errors.threshold ? (
-              <p className="mt-1 text-xs leading-normal text-[#dc4646]">{errors.threshold}</p>
-            ) : (
-              <p className="page-input_item-input-desc">
-                0.3~0.5를 권장합니다. 0은 유사도 필터를 적용하지 않습니다.
-              </p>
-            )}
+                  />
+                  {fieldState.error ? (
+                    <p className="mt-1 text-xs leading-normal text-[#dc4646]">
+                      {fieldState.error.message}
+                    </p>
+                  ) : (
+                    <p className="page-input_item-input-desc">
+                      0.3~0.5를 권장합니다. 0은 유사도 필터를 적용하지 않습니다.
+                    </p>
+                  )}
+                </>
+              )}
+            />
           </div>
         </div>
       </div>
@@ -693,10 +683,10 @@ const Step2 = ({ formData, setFormData, errors, clearError }: Step2Props) => {
 };
 
 interface Step3Props {
-  formData: KnowledgeBaseFormValues;
+  values: KnowledgeBaseFormValues;
 }
 
-const Step3 = ({ formData }: Step3Props) => {
+const Step3 = ({ values }: Step3Props) => {
   const accordionItems1 = [
     {
       label: '기본 정보',
@@ -705,18 +695,18 @@ const Step3 = ({ formData }: Step3Props) => {
           <div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">이름</div>
-              <div className="page-accordion_item-data">{formData.name || '-'}</div>
+              <div className="page-accordion_item-data">{values.name || '-'}</div>
             </div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">설명</div>
-              <div className="page-accordion_item-data">{formData.description || '-'}</div>
+              <div className="page-accordion_item-data">{values.description || '-'}</div>
             </div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">파일</div>
               <div className="page-accordion_item-data">
-                {formData.file ? (
+                {values.file ? (
                   <div className="flex items-center gap-2">
-                    <IconDocument /> {formData.file.name}
+                    <IconDocument /> {values.file.name}
                   </div>
                 ) : (
                   '-'
@@ -737,19 +727,19 @@ const Step3 = ({ formData }: Step3Props) => {
           <div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">청크 타입</div>
-              <div className="page-accordion_item-data">{formData.chunk_type.name || '-'}</div>
+              <div className="page-accordion_item-data">{values.chunk_type.name || '-'}</div>
             </div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">청크 길이</div>
-              <div className="page-accordion_item-data">{formData.chunk_size}</div>
+              <div className="page-accordion_item-data">{values.chunk_size}</div>
             </div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">언어</div>
-              <div className="page-accordion_item-data">{formData.language.name || '-'}</div>
+              <div className="page-accordion_item-data">{values.language.name || '-'}</div>
             </div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">청크 중첩</div>
-              <div className="page-accordion_item-data">{formData.chunk_overlap}</div>
+              <div className="page-accordion_item-data">{values.chunk_overlap}</div>
             </div>
           </div>
         </div>
@@ -765,7 +755,7 @@ const Step3 = ({ formData }: Step3Props) => {
           <div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">모델</div>
-              <div className="page-accordion_item-data">{formData.embedding_model.name || '-'}</div>
+              <div className="page-accordion_item-data">{values.embedding_model.name || '-'}</div>
             </div>
           </div>
         </div>
@@ -781,15 +771,15 @@ const Step3 = ({ formData }: Step3Props) => {
           <div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">검색 타입</div>
-              <div className="page-accordion_item-data">{formData.search_method.name || '-'}</div>
+              <div className="page-accordion_item-data">{values.search_method.name || '-'}</div>
             </div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">Top K</div>
-              <div className="page-accordion_item-data">{formData.top_k}</div>
+              <div className="page-accordion_item-data">{values.top_k}</div>
             </div>
             <div className="page-accordion_item-box">
               <div className="page-accordion_item-name">점수 임계값</div>
-              <div className="page-accordion_item-data">{formData.threshold}</div>
+              <div className="page-accordion_item-data">{values.threshold}</div>
             </div>
           </div>
         </div>

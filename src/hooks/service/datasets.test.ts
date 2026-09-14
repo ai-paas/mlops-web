@@ -205,7 +205,7 @@ describe('datasets hooks', () => {
       formData.append('file', new File(['a,b'], 'data.csv', { type: 'text/csv' }));
       const response = await result.current.validateDataset(formData);
 
-      expect(postSpy).toHaveBeenCalledWith('datasets/validate', { body: formData });
+      expect(postSpy).toHaveBeenCalledWith('datasets/validate', { body: formData, timeout: false });
       expect(response).toEqual(validationResult);
 
       postSpy.mockRestore();

@@ -8,8 +8,9 @@ import {
   useTestProteinStructurePredictionWorkflow,
   useTestRagWorkflow,
 } from '@/hooks/service/workflows';
-import type { WorkflowModel, WorkflowModelTask } from '@/types/workflow';
+import type { WorkflowModel, WorkflowModelTask, WorkflowTestResult } from '@/types/workflow';
 import styles from '@/pages/workflow/workflow.module.scss';
+import { getServerErrorMessage } from '@/lib/api';
 
 type TestKind =
   | 'rag'
@@ -41,6 +42,12 @@ interface ChatMessage {
   content: string;
   isError?: boolean;
 }
+
+// MLOps는 실패도 HTTP 200 + results[].error로 반환한다. 지식베이스가 붙어 있으면 검색 결과가
+// final_result를 채우므로, final_result 유무로 성공을 판정하면 실패한 요청의 참고자료 원문이
+// 답변처럼 노출된다. 성공/실패는 results[].error로만 판정한다.
+const getTestResultErrors = (results: WorkflowTestResult[]) =>
+  results.flatMap((item) => (item.error != null ? [`${item.component_name}: ${item.error}`] : []));
 
 interface WorkflowTestTabProps {
   workflowId?: string;
@@ -115,15 +122,32 @@ export function WorkflowTestTab({
       { surro_workflow_id: workflowId, text: trimmed },
       {
         onSuccess: (data) => {
-          appendChatMessage({
-            role: 'assistant',
-            content: data.final_result ?? JSON.stringify(data.results, null, 2),
-          });
+          const errors = getTestResultErrors(data.results);
+          if (errors.length > 0) {
+            appendChatMessage({ role: 'assistant', content: errors.join('\n'), isError: true });
+            return;
+          }
+
+          // 성공이면 final_result는 채워져 온다(백엔드 확인). 여기 걸리는 건 비정상 응답이므로
+          // 응답 원문을 덤프하지 않고 상태만 알린다.
+          if (data.final_result == null) {
+            appendChatMessage({
+              role: 'assistant',
+              content: '답변을 받지 못했습니다.',
+              isError: true,
+            });
+            return;
+          }
+
+          appendChatMessage({ role: 'assistant', content: data.final_result });
         },
-        onError: () => {
+        onError: (error) => {
           appendChatMessage({
             role: 'assistant',
-            content: '요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+            content: getServerErrorMessage(
+              error,
+              '요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+            ),
             isError: true,
           });
         },
@@ -264,6 +288,9 @@ export function WorkflowTestTab({
     };
   };
 
+  // 결과 이미지나 응답 원문이 아니라 results[].error로 실패를 판정한다.
+  const testErrors = mutation.testResult ? getTestResultErrors(mutation.testResult.results) : [];
+
   const isValid =
     testKind === 'ml'
       ? Boolean(image)
@@ -358,6 +385,12 @@ export function WorkflowTestTab({
           <div className={styles.testError}>테스트 요청에 실패했습니다.</div>
         ) : !mutation.testResult ? (
           <div className={styles.testEmpty}>테스트를 실행하면 결과가 표시됩니다.</div>
+        ) : testErrors.length > 0 ? (
+          <div className={styles.testError}>
+            {testErrors.map((message) => (
+              <div key={message}>{message}</div>
+            ))}
+          </div>
         ) : testKind === 'ml' ? (
           ml.testResult?.final_result ? (
             <div className={styles.testDetectionImageBox}>

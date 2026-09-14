@@ -56,6 +56,64 @@ describe('LoginPage', () => {
     );
   });
 
+  it('아이디·비밀번호를 비운 채 제출하면 필수 안내를 표시하고 요청하지 않는다', async () => {
+    const requestSpy = vi.fn();
+    server.use(
+      http.post(loginUrl, () => {
+        requestSpy();
+        return successResponse();
+      })
+    );
+    const { user } = renderLoginPage();
+
+    await user.click(screen.getByRole('button', { name: '로그인' }));
+
+    expect(await screen.findByText('아이디는 필수입니다.')).toBeInTheDocument();
+    expect(screen.getByText('비밀번호는 필수입니다.')).toBeInTheDocument();
+    expect(screen.getByLabelText('아이디')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('비밀번호')).toHaveAttribute('aria-invalid', 'true');
+    // 필드 에러도 서버 에러처럼 aria-describedby로 입력에 연결된다
+    expect(screen.getByText('아이디는 필수입니다.')).toHaveAttribute('id', 'member-id-error');
+    expect(screen.getByLabelText('아이디')).toHaveAttribute('aria-describedby', 'member-id-error');
+    expect(screen.getByLabelText('비밀번호')).toHaveAttribute('aria-describedby', 'password-error');
+    expect(requestSpy).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('서버 에러가 표시된 뒤 검증에 실패하는 재제출을 하면 서버 에러를 지우고 필드 안내만 남긴다', async () => {
+    server.use(http.post(loginUrl, () => HttpResponse.json({}, { status: 401 })));
+    const { user } = renderLoginPage();
+    await fillAndSubmit(user);
+    await screen.findByText('아이디 또는 비밀번호를 확인해주세요.');
+
+    // 서버 에러가 떠 있는 동안은 비운 필드의 검증 에러를 겹쳐 보이지 않는다
+    await user.clear(screen.getByLabelText('아이디'));
+    expect(screen.queryByText('아이디는 필수입니다.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '로그인' }));
+
+    expect(await screen.findByText('아이디는 필수입니다.')).toBeInTheDocument();
+    expect(screen.queryByText('아이디 또는 비밀번호를 확인해주세요.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('비밀번호')).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  it('아이디만 입력하고 제출하면 비밀번호 안내만 표시되고, 입력하면 사라진다', async () => {
+    const { user } = renderLoginPage();
+    await user.type(screen.getByLabelText('아이디'), 'tester');
+
+    await user.click(screen.getByRole('button', { name: '로그인' }));
+
+    expect(await screen.findByText('비밀번호는 필수입니다.')).toBeInTheDocument();
+    expect(screen.queryByText('아이디는 필수입니다.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('아이디')).toHaveAttribute('aria-invalid', 'false');
+
+    // 제출 후에는 입력 즉시 재검증(reValidateMode: onChange)되어 에러가 지워진다
+    await user.type(screen.getByLabelText('비밀번호'), 's');
+    await waitFor(() =>
+      expect(screen.queryByText('비밀번호는 필수입니다.')).not.toBeInTheDocument()
+    );
+  });
+
   it('입력 목적과 자동완성 정보를 제공한다', () => {
     renderLoginPage();
 

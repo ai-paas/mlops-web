@@ -45,7 +45,7 @@ const toSearchParams = (params: object) =>
 // ────────────────────────────────────────────────────────────
 
 export const useGetDashboardSummary = (enabled: boolean = true) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.summary(),
     queryFn: () => api.get<DashboardSummary>(`${BASE}/summary`).json(),
     enabled,
@@ -55,6 +55,7 @@ export const useGetDashboardSummary = (enabled: boolean = true) => {
     summary: data,
     isPending,
     isError,
+    error,
   };
 };
 
@@ -63,7 +64,7 @@ export const useGetDashboardSummary = (enabled: boolean = true) => {
 // ────────────────────────────────────────────────────────────
 
 export const useGetMeDashboardSummary = () => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.meSummary(),
     queryFn: () => api.get<MeDashboardSummary>(`${ME_BASE}/summary`).json(),
   });
@@ -72,6 +73,7 @@ export const useGetMeDashboardSummary = () => {
     summary: data,
     isPending,
     isError,
+    error,
   };
 };
 
@@ -80,7 +82,7 @@ export const useGetMeDashboardSummary = () => {
 // ────────────────────────────────────────────────────────────
 
 export const useGetMeDashboardServices = () => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.meServices(),
     queryFn: () => api.get<MeDashboardServices>(`${ME_BASE}/services`).json(),
   });
@@ -90,6 +92,7 @@ export const useGetMeDashboardServices = () => {
     source: data?.source,
     isPending,
     isError,
+    error,
   };
 };
 
@@ -98,7 +101,7 @@ export const useGetMeDashboardServices = () => {
 // ────────────────────────────────────────────────────────────
 
 export const useGetMeDashboardMonitoring = (params: GetMeMonitoringParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.meMonitoring(params),
     queryFn: () =>
       api
@@ -114,6 +117,7 @@ export const useGetMeDashboardMonitoring = (params: GetMeMonitoringParams = {}) 
     source: data?.source,
     isPending,
     isError,
+    error,
   };
 };
 
@@ -122,7 +126,7 @@ export const useGetMeDashboardMonitoring = (params: GetMeMonitoringParams = {}) 
 // ────────────────────────────────────────────────────────────
 
 export const useGetMeDashboardActivities = (params: GetMeActivitiesParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.meActivities(params),
     queryFn: () =>
       api
@@ -139,6 +143,7 @@ export const useGetMeDashboardActivities = (params: GetMeActivitiesParams = {}) 
     },
     isPending,
     isError,
+    error,
   };
 };
 
@@ -147,7 +152,7 @@ export const useGetMeDashboardActivities = (params: GetMeActivitiesParams = {}) 
 // ────────────────────────────────────────────────────────────
 
 export const useGetDashboardTopUsers = (params: GetTopUsersParams, enabled: boolean = true) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.topUsers(params),
     queryFn: () =>
       api
@@ -161,6 +166,7 @@ export const useGetDashboardTopUsers = (params: GetTopUsersParams, enabled: bool
     items: data?.items ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
@@ -169,7 +175,7 @@ export const useGetDashboardTopUsers = (params: GetTopUsersParams, enabled: bool
 // ────────────────────────────────────────────────────────────
 
 export const useGetInfraStatus = () => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.infraStatus(),
     queryFn: () => api.get<InfraStatus>(`${BASE}/infra/status`).json(),
   });
@@ -179,6 +185,7 @@ export const useGetInfraStatus = () => {
     hasData: data?.has_data ?? false,
     isPending,
     isError,
+    error,
   };
 };
 
@@ -187,7 +194,7 @@ export const useGetInfraStatus = () => {
 // ────────────────────────────────────────────────────────────
 
 export const useGetInfraNodes = (params: GetInfraNodesParams, enabled: boolean = true) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.infraNodes(params),
     queryFn: () =>
       api.get<InfraNodes>(`${BASE}/infra/nodes`, { searchParams: toSearchParams(params) }).json(),
@@ -199,6 +206,7 @@ export const useGetInfraNodes = (params: GetInfraNodesParams, enabled: boolean =
     nodes: data?.nodes ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
@@ -210,7 +218,7 @@ export const useGetInfraResources = (
   params: GetInfraResourcesParams,
   enabled: boolean = true
 ) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.infraResources(params),
     queryFn: () =>
       api
@@ -225,6 +233,7 @@ export const useGetInfraResources = (
     nodes: data?.nodes ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
@@ -233,7 +242,7 @@ export const useGetInfraResources = (
 // ────────────────────────────────────────────────────────────
 
 export const useGetDashboardEvents = (params: GetEventsParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.events(params),
     queryFn: () =>
       api.get<Page<AuditLog>>(`${BASE}/events`, { searchParams: toSearchParams(params) }).json(),
@@ -248,6 +257,7 @@ export const useGetDashboardEvents = (params: GetEventsParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
@@ -256,7 +266,7 @@ export const useGetDashboardEvents = (params: GetEventsParams = {}) => {
 // ────────────────────────────────────────────────────────────
 
 export const useGetDashboardTrends = (params: GetTrendsParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.trends(params),
     queryFn: () =>
       api.get<DashboardTrends>(`${BASE}/trends`, { searchParams: toSearchParams(params) }).json(),
@@ -267,6 +277,7 @@ export const useGetDashboardTrends = (params: GetTrendsParams = {}) => {
     series: data?.series ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
@@ -274,7 +285,7 @@ export const useGetDashboardTrends = (params: GetTrendsParams = {}) => {
 export const useRefreshDashboardTrends = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: () => api.post<TrendsRefreshResult>(`${BASE}/trends/refresh`).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
@@ -285,6 +296,7 @@ export const useRefreshDashboardTrends = () => {
     refreshTrends: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -294,7 +306,7 @@ export const useRefreshDashboardTrends = () => {
 // ────────────────────────────────────────────────────────────
 
 export const useGetApiMetrics = (params: GetApiMetricsParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.apiMetrics(params),
     queryFn: () =>
       api.get<ApiMetrics>(`${BASE}/api-metrics`, { searchParams: toSearchParams(params) }).json(),
@@ -306,6 +318,7 @@ export const useGetApiMetrics = (params: GetApiMetricsParams = {}) => {
     bucketsMs: data?.buckets_ms ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
@@ -313,7 +326,7 @@ export const useGetApiMetrics = (params: GetApiMetricsParams = {}) => {
 export const useFlushApiMetrics = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: () => api.post<ApiMetricsFlushResult>(`${BASE}/api-metrics/flush`).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.apiMetrics() });
@@ -324,6 +337,7 @@ export const useFlushApiMetrics = () => {
     flushApiMetrics: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -333,7 +347,7 @@ export const useFlushApiMetrics = () => {
 // ────────────────────────────────────────────────────────────
 
 export const useGetProvidersHealth = (params: GetProvidersHealthParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.dashboard.providersHealth(params),
     queryFn: () =>
       api
@@ -346,6 +360,7 @@ export const useGetProvidersHealth = (params: GetProvidersHealthParams = {}) => 
     history: data?.history ?? {},
     isPending,
     isError,
+    error,
   };
 };
 
@@ -353,7 +368,7 @@ export const useGetProvidersHealth = (params: GetProvidersHealthParams = {}) => 
 export const useProbeProvidersHealth = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: () => api.post<ProvidersHealth>(`${BASE}/providers/health/probe`).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.providersHealth() });
@@ -364,6 +379,7 @@ export const useProbeProvidersHealth = () => {
     probeProviders: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };

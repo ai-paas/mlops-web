@@ -2,6 +2,7 @@ import { useDeleteKnowledgeBase } from '@/hooks/service/knowledgebase';
 import { AlertDialog, Button, useToast } from '@innogrid/ui';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { getServerErrorMessage } from '@/lib/api';
 
 export const DeleteKnowledgeBaseButton = ({
   knowledgeBaseId,
@@ -23,11 +24,11 @@ export const DeleteKnowledgeBaseButton = ({
           navigate(redirect, { replace: true });
         }
       },
-      onError: () => {
+      onError: (error) => {
         toast.open({
           status: 'negative',
           title: '지식 베이스 삭제 실패',
-          children: '지식 베이스 삭제 중 오류가 발생했습니다.',
+          children: getServerErrorMessage(error, '지식 베이스 삭제 중 오류가 발생했습니다.'),
         });
       },
     });

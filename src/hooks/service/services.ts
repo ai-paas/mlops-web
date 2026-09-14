@@ -11,7 +11,7 @@ import type {
 } from '../../types/service';
 
 export const useGetServices = (params: GetServicesParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.services.list(params),
     queryFn: () => api.get<Page<Service>>('services/', { searchParams: { ...params } }).json(),
   });
@@ -25,13 +25,14 @@ export const useGetServices = (params: GetServicesParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useCreateService = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (data: CreateServiceRequest) =>
       api.post('services/', { json: data }).json<Service>(),
     onSuccess: () => {
@@ -43,12 +44,13 @@ export const useCreateService = () => {
     createService: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useGetService = (surro_service_id?: string, enabled: boolean = true) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.services.detail(surro_service_id),
     queryFn: () => api.get(`services/${surro_service_id}`).json<ServiceDetail>(),
     enabled: enabled && !!surro_service_id,
@@ -58,13 +60,14 @@ export const useGetService = (surro_service_id?: string, enabled: boolean = true
     service: data,
     isPending,
     isError,
+    error,
   };
 };
 
 export const useUpdateService = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({ surro_service_id, ...data }: UpdateServiceRequest) =>
       api.put(`services/${surro_service_id}`, { json: data }).json<Service>(),
     onSuccess: () => {
@@ -76,6 +79,7 @@ export const useUpdateService = () => {
     updateService: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -83,7 +87,7 @@ export const useUpdateService = () => {
 export const useDeleteService = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: async (surro_service_id: string) => {
       await api.delete(`services/${surro_service_id}`);
     },
@@ -96,6 +100,7 @@ export const useDeleteService = () => {
     deleteService: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };

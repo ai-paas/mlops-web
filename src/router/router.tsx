@@ -1,6 +1,7 @@
 import { Suspense, lazy, type ComponentType } from 'react';
-import { Navigate, createBrowserRouter, type RouteObject } from 'react-router';
+import { Navigate, Outlet, createBrowserRouter, type RouteObject } from 'react-router';
 import DefaultLayout from '@/pages/layout';
+import { useAuth } from '@/hooks/useAuth';
 
 const LoginPage = lazy(() => import('@/pages/login/page'));
 const HomePage = lazy(() => import('@/pages/page'));
@@ -110,6 +111,15 @@ const page = (Component: ComponentType) => (
     <Component />
   </Suspense>
 );
+
+// 관리자 전용 구간의 패스리스 레이아웃 라우트 — DefaultLayout(인증 가드) 안쪽에서만 쓴다.
+// 메뉴는 이미 비관리자에게 숨겨져 있어(menu.tsx) 직접 URL 진입만 해당하므로 403 페이지 대신 홈으로 보낸다.
+// 사용처가 늘면 공용 컴포넌트로 분리(PageLoading과 같은 기준).
+// eslint-disable-next-line react-refresh/only-export-components
+const AdminRoute = () => {
+  const { isAdmin } = useAuth();
+  return isAdmin ? <Outlet /> : <Navigate to="/" replace />;
+};
 
 // 라우트 정의를 분리 export — 테스트에서 createMemoryRouter(routes, { initialEntries })로
 // 라우팅/인증 가드 통합 테스트를 작성할 수 있게 한다.
@@ -372,20 +382,26 @@ export const routes: RouteObject[] = [
         ],
       },
       {
-        path: 'member-management',
-        element: page(MemberManagementPage),
-      },
-      {
-        path: 'member-management/:id',
-        element: page(MemberManagementDetailPage),
-      },
-      {
-        path: 'member-management/create',
-        element: page(MemberCreatePage),
-      },
-      {
-        path: 'member-management/:id/edit',
-        element: page(MemberEditPage),
+        // 멤버 관리는 admin 전용 — 일반 계정의 직접 URL 진입을 차단한다
+        element: <AdminRoute />,
+        children: [
+          {
+            path: 'member-management',
+            element: page(MemberManagementPage),
+          },
+          {
+            path: 'member-management/:id',
+            element: page(MemberManagementDetailPage),
+          },
+          {
+            path: 'member-management/create',
+            element: page(MemberCreatePage),
+          },
+          {
+            path: 'member-management/:id/edit',
+            element: page(MemberEditPage),
+          },
+        ],
       },
     ],
   },

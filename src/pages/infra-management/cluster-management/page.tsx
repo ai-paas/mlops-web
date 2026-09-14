@@ -11,9 +11,9 @@ import {
   useSearchInputState,
 } from '@innogrid/ui';
 
-import { EditClusterButton } from '@/components/features/infra-managememt/cluster-management/edit-cluster-button';
-import { CreateClusterButton } from '@/components/features/infra-managememt/cluster-management/create-cluster-button';
-import { DeleteClusterButton } from '@/components/features/infra-managememt/cluster-management/delete-cluster-button';
+import { EditClusterButton } from '@/components/features/infra-management/cluster-management/edit-cluster-button';
+import { CreateClusterButton } from '@/components/features/infra-management/cluster-management/create-cluster-button';
+import { DeleteClusterButton } from '@/components/features/infra-management/cluster-management/delete-cluster-button';
 import { formatDateTime } from '@/util/date';
 import { useGetClusters } from '@/hooks/service/clusters';
 import type { Cluster } from '@/types/cluster';

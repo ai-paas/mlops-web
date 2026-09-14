@@ -240,7 +240,7 @@ vi.mock('@innogrid/ui', async () => {
       multiple?: boolean;
       onAddFile?: (files: File[]) => void;
       onDeleteFile?: (value: { file: File; fileIndex: number }) => void;
-      onError?: () => void;
+      onError?: (value: { errorFiles: File[]; errorMessage: string }) => void;
     }) => (
       <div>
         <input
@@ -253,8 +253,10 @@ vi.mock('@innogrid/ui', async () => {
             const isAllowed = (file: File) =>
               !extensions?.length ||
               extensions.some((ext) => file.name.toLowerCase().endsWith(`.${ext.toLowerCase()}`));
-            if (list.some((file) => !isAllowed(file))) {
-              onError?.();
+            const errorFiles = list.filter((file) => !isAllowed(file));
+            if (errorFiles.length > 0) {
+              // 실제 컴포넌트와 같은 시그니처({ errorFiles, errorMessage })로 호출한다
+              onError?.({ errorFiles, errorMessage: '허용되지 않는 파일 형식입니다.' });
               return;
             }
             onAddFile?.(list);

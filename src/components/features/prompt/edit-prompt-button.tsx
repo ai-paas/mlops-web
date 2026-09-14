@@ -2,22 +2,17 @@ import { Button, Input, Modal, Textarea, useToast } from '@innogrid/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { useGetPrompt, useGetPromptVariableTypes, useUpdatePrompt } from '@/hooks/service/prompts';
 import { PromptEditor } from '@/components/ui/prompt-editor';
-
-const schema = z.object({
-  name: z.string().min(1, '이름은 필수입니다.'),
-  description: z.string().optional(),
-  content: z.string().min(1, '프롬프트 내용은 필수입니다.'),
-});
-
-type Schema = z.infer<typeof schema>;
-
-const extractVariables = (content: string): string[] => {
-  const matches = content.matchAll(/\{\{#\s*([^{}#]+?)\s*#\}\}/g);
-  return [...new Set([...matches].map((match) => match[1]))];
-};
+import { getServerErrorMessage } from '@/lib/api';
+import {
+  createInitialPromptFormValues,
+  createPromptFormSchema,
+  extractPromptVariables,
+  findInvalidPromptVariables,
+  PROMPT_FORM_MESSAGES,
+  type PromptFormValues,
+} from './prompt-form';
 
 export const EditPromptButton = ({ promptId }: { promptId?: number }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,6 +21,11 @@ export const EditPromptButton = ({ promptId }: { promptId?: number }) => {
   const { availableTypes } = useGetPromptVariableTypes();
   const toast = useToast();
 
+  // 사용 가능한 변수 목록은 비동기로 로드되므로 목록이 바뀌면 resolver도 다시 만든다
+  const resolver = useMemo(
+    () => zodResolver(createPromptFormSchema(availableTypes)),
+    [availableTypes]
+  );
   const {
     register,
     handleSubmit,
@@ -33,16 +33,16 @@ export const EditPromptButton = ({ promptId }: { promptId?: number }) => {
     control,
     watch,
     formState: { errors },
-  } = useForm<Schema>({
-    resolver: zodResolver(schema),
-    defaultValues: { name: '', description: '', content: '' },
+  } = useForm<PromptFormValues>({
+    resolver,
+    defaultValues: createInitialPromptFormValues(),
   });
 
+  // 입력 중에도 허용되지 않은 변수를 바로 경고하고 확인 버튼을 잠근다(제출 검증은 스키마가 담당)
   const content = watch('content');
-  const variables = useMemo(() => extractVariables(content ?? ''), [content]);
   const invalidVariables = useMemo(
-    () => variables.filter((v) => !availableTypes.includes(v)),
-    [variables, availableTypes]
+    () => findInvalidPromptVariables(content ?? '', availableTypes),
+    [content, availableTypes]
   );
 
   const openModal = useCallback(() => {
@@ -52,26 +52,18 @@ export const EditPromptButton = ({ promptId }: { promptId?: number }) => {
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false);
-    reset({ name: '', description: '', content: '' });
+    reset(createInitialPromptFormValues());
   }, [reset]);
 
-  const onSubmit = (data: Schema) => {
+  const onSubmit = (data: PromptFormValues) => {
     if (!promptId) return;
-    if (invalidVariables.length > 0) {
-      toast.open({
-        status: 'negative',
-        title: '사용할 수 없는 변수',
-        children: `사용할 수 없는 변수입니다: ${invalidVariables.map((v) => `{{#${v}#}}`).join(', ')}`,
-      });
-      return;
-    }
     updatePrompt(
       {
         surro_prompt_id: promptId,
         name: data.name,
-        description: data.description ?? '',
+        description: data.description,
         content: data.content,
-        prompt_variable: variables,
+        prompt_variable: extractPromptVariables(data.content),
       },
       {
         onSuccess: () => {
@@ -82,11 +74,11 @@ export const EditPromptButton = ({ promptId }: { promptId?: number }) => {
           });
           closeModal();
         },
-        onError: () => {
+        onError: (error) => {
           toast.open({
             status: 'negative',
             title: '프롬프트 편집 실패',
-            children: '프롬프트 편집 중 오류가 발생했습니다.',
+            children: getServerErrorMessage(error, '프롬프트 편집 중 오류가 발생했습니다.'),
           });
         },
       }
@@ -168,9 +160,13 @@ export const EditPromptButton = ({ promptId }: { promptId?: number }) => {
                   />
                 )}
               />
-              {invalidVariables.length > 0 ? (
-                <p className="page-input_item-input-desc" style={{ color: '#d92d20' }}>
-                  사용할 수 없는 변수입니다: {invalidVariables.map((v) => `{{#${v}#}}`).join(', ')}
+              {errors.content?.message ? (
+                <p className="mt-1 text-xs leading-normal tracking-[-0.5px] text-[#dc4646]">
+                  {errors.content.message}
+                </p>
+              ) : invalidVariables.length > 0 ? (
+                <p className="mt-1 text-xs leading-normal tracking-[-0.5px] text-[#dc4646]">
+                  {PROMPT_FORM_MESSAGES.invalidVariables(invalidVariables)}
                 </p>
               ) : (
                 <p className="page-input_item-input-desc">

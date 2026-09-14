@@ -108,6 +108,21 @@ export interface OperationProgress {
 
 export type OperationState = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | string;
 
+/**
+ * 백엔드 ProvisionEvent 와 1:1. SSE `pulumi` 이벤트로만 오고 저장은 없다 —
+ * 스트림을 놓치면 다시 못 받는다.
+ */
+export interface ProvisionEvent {
+  operationId?: string;
+  /** pulumi event kind — 'diagnostic' | 'resOutputs' | 'summary' 등. */
+  type?: string;
+  timestamp?: string;
+  resourceUrn?: string;
+  message?: string;
+  severity?: 'info' | 'warning' | 'error' | string;
+  raw?: Record<string, unknown>;
+}
+
 export interface Operation {
   id?: string;
   type?: string;

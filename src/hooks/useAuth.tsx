@@ -2,11 +2,20 @@ import {
   getAccessToken,
   getOrCreateRefreshPromise,
   setAccessToken as setApiAccessToken,
+  subscribeAccessToken,
 } from '@/lib/api';
 import { useLogout } from '@/hooks/service/authentication';
 import { parseJwt } from '@/util/jwt';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 interface AuthContext {
   accessToken: string | null;
@@ -20,15 +29,13 @@ interface AuthContext {
 const AuthContext = createContext<AuthContext | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [accessToken, setAccessTokenState] = useState(getAccessToken());
+  // 토큰의 원본은 lib/api의 메모리 하나다. 컨텍스트는 구독으로 따라가는 미러라서
+  // ky 훅 안에서 일어나는 refresh 성공(새 토큰)·실패(null → 레이아웃 가드가 /login으로 보냄)가
+  // 별도 배선 없이 인증 상태에 반영된다.
+  const accessToken = useSyncExternalStore(subscribeAccessToken, getAccessToken);
   const [isLoading, setIsLoading] = useState(!accessToken);
   const queryClient = useQueryClient();
   const { mutateAsync: requestLogout } = useLogout();
-
-  const setAccessToken = useCallback((token: string | null) => {
-    setApiAccessToken(token);
-    setAccessTokenState(token);
-  }, []);
 
   const isAdmin = useMemo(() => {
     return accessToken ? parseJwt(accessToken)?.role === 'admin' : false;
@@ -42,25 +49,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch {
       // 서버 무효화 실패는 무시
     }
-    setAccessToken(null);
+    setApiAccessToken(null);
     queryClient.clear();
-  }, [requestLogout, queryClient, setAccessToken]);
+  }, [requestLogout, queryClient]);
 
   useEffect(() => {
     const init = async () => {
       if (!getAccessToken()) {
         try {
-          const newAccessToken = await getOrCreateRefreshPromise();
-          setAccessToken(newAccessToken);
+          // 성공 시 새 토큰은 lib/api가 메모리에 쓰고 구독으로 반영된다
+          await getOrCreateRefreshPromise();
         } catch {
-          setAccessToken(null);
+          // 실패 시 lib/api가 메모리를 비운 상태(null) 그대로 — 비인증으로 로딩만 끝낸다
         }
       }
       setIsLoading(false);
     };
 
     init();
-  }, [setAccessToken]);
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -68,10 +75,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       isAuthenticated: !!accessToken,
       isAdmin,
       isLoading,
-      setAccessToken,
+      setAccessToken: setApiAccessToken,
       logout,
     }),
-    [accessToken, isAdmin, isLoading, logout, setAccessToken]
+    [accessToken, isAdmin, isLoading, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

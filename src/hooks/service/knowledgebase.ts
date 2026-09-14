@@ -17,7 +17,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export const useGetChunkTypes = () => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.knowledgeBaseMeta.chunkTypes,
     queryFn: () => api.get('knowledge-bases/chunk-types').json<Page<ChunkType>>(),
   });
@@ -26,11 +26,12 @@ export const useGetChunkTypes = () => {
     chunkTypes: data?.data ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetLanguages = () => {
-  const { data, isPending, isError, isFetched } = useQuery({
+  const { data, isPending, isError, error, isFetched } = useQuery({
     queryKey: queryKeys.knowledgeBaseMeta.languages,
     queryFn: () => api.get('knowledge-bases/languages').json<Page<Language>>(),
   });
@@ -39,12 +40,13 @@ export const useGetLanguages = () => {
     languages: data?.data ?? [],
     isPending,
     isError,
+    error,
     isFetched,
   };
 };
 
 export const useGetSearchMethods = () => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.knowledgeBaseMeta.searchMethods,
     queryFn: () => api.get('knowledge-bases/search-methods').json<Page<SearchMethod>>(),
   });
@@ -53,13 +55,14 @@ export const useGetSearchMethods = () => {
     searchMethods: data?.data ?? [],
     isPending,
     isError,
+    error,
   };
 };
 
 export const useCreateKnowledgeBase = () => {
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending, isError, isSuccess } = useMutation({
+  const { mutateAsync, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (data: FormData) =>
       api.post('knowledge-bases', { body: data, timeout: false }).json<KnowledgeBaseBrief>(),
     retry: false,
@@ -72,12 +75,13 @@ export const useCreateKnowledgeBase = () => {
     createKnowledgeBase: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useGetKnowledgeBases = (params: GetKnowledgeBasesParams = {}) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.knowledgeBases.list(params),
     queryFn: () =>
       api.get('knowledge-bases', { searchParams: { ...params } }).json<Page<KnowledgeBaseBrief>>(),
@@ -92,11 +96,12 @@ export const useGetKnowledgeBases = (params: GetKnowledgeBasesParams = {}) => {
     },
     isPending,
     isError,
+    error,
   };
 };
 
 export const useGetKnowledgeBase = (surro_knowledge_id?: number) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.knowledgeBases.detail(surro_knowledge_id),
     queryFn: () => api.get(`knowledge-bases/${surro_knowledge_id}`).json<KnowledgeBase>(),
     enabled: !!surro_knowledge_id,
@@ -106,13 +111,14 @@ export const useGetKnowledgeBase = (surro_knowledge_id?: number) => {
     knowledgeBase: data,
     isPending,
     isError,
+    error,
   };
 };
 
 export const useUpdateKnowledgeBase = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, mutateAsync, isPending, isError, isSuccess } = useMutation({
+  const { mutate, mutateAsync, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: ({ surro_knowledge_id, ...data }: UpdateKnowledgeBaseRequest) =>
       api.put(`knowledge-bases/${surro_knowledge_id}`, { json: data }).json<KnowledgeBaseBrief>(),
     onSuccess: (_, variables) => {
@@ -128,6 +134,7 @@ export const useUpdateKnowledgeBase = () => {
     updateKnowledgeBaseAsync: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -135,7 +142,7 @@ export const useUpdateKnowledgeBase = () => {
 export const useDeleteKnowledgeBase = () => {
   const queryClient = useQueryClient();
 
-  const { mutate, isPending, isError, isSuccess } = useMutation({
+  const { mutate, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: async (surro_knowledge_id: number) => {
       await api.delete(`knowledge-bases/${surro_knowledge_id}`);
     },
@@ -148,6 +155,7 @@ export const useDeleteKnowledgeBase = () => {
     deleteKnowledgeBase: mutate,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -155,7 +163,7 @@ export const useDeleteKnowledgeBase = () => {
 export const useAddFileToKnowledgeBase = (surro_knowledge_id: number) => {
   const queryClient = useQueryClient();
 
-  const { mutate, mutateAsync, isPending, isError, isSuccess } = useMutation({
+  const { mutate, mutateAsync, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (data: AddFileRequest) => {
       const formData = new FormData();
       formData.append('file', data.file);
@@ -182,6 +190,7 @@ export const useAddFileToKnowledgeBase = (surro_knowledge_id: number) => {
     addFileAsync: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
@@ -189,7 +198,7 @@ export const useAddFileToKnowledgeBase = (surro_knowledge_id: number) => {
 export const useDeleteFileFromKnowledgeBase = (surro_knowledge_id: number) => {
   const queryClient = useQueryClient();
 
-  const { mutate, mutateAsync, isPending, isError, isSuccess } = useMutation({
+  const { mutate, mutateAsync, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (file_id: number) =>
       api.delete(`knowledge-bases/${surro_knowledge_id}/files/${file_id}`).json<KnowledgeBase>(),
     onSuccess: () => {
@@ -207,12 +216,13 @@ export const useDeleteFileFromKnowledgeBase = (surro_knowledge_id: number) => {
     deleteFileAsync: mutateAsync,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useSearchKnowledgeBase = (surro_knowledge_id: number) => {
-  const { mutate, mutateAsync, data, isPending, isError, isSuccess } = useMutation({
+  const { mutate, mutateAsync, data, isPending, isError, error, isSuccess } = useMutation({
     mutationFn: (searchParams: SearchKnowledgeBaseRequest) =>
       api
         .post(`knowledge-bases/${surro_knowledge_id}/search`, { json: searchParams })
@@ -225,12 +235,13 @@ export const useSearchKnowledgeBase = (surro_knowledge_id: number) => {
     searchResults: data,
     isPending,
     isError,
+    error,
     isSuccess,
   };
 };
 
 export const useGetSearchRecords = (surro_knowledge_id: number) => {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.knowledgeBases.searchRecords(surro_knowledge_id),
     queryFn: () =>
       api.get(`knowledge-bases/${surro_knowledge_id}/search-records`).json<SearchRecord[]>(),
@@ -241,5 +252,6 @@ export const useGetSearchRecords = (surro_knowledge_id: number) => {
     searchRecords: data ?? [],
     isPending,
     isError,
+    error,
   };
 };
