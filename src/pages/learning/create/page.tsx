@@ -1,4 +1,9 @@
-import { useCreateDataset, useGetDatasets, useValidateDataset } from '@/hooks/service/datasets';
+import {
+  useCreateDataset,
+  useGetDatasetKinds,
+  useGetDatasets,
+  useValidateDataset,
+} from '@/hooks/service/datasets';
 import { useSubmitTraining } from '@/hooks/service/learning';
 import { useGetModels } from '@/hooks/service/models';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,7 +13,6 @@ import {
   Button,
   FileDrop,
   Input,
-  RadioButton,
   RadioGroupButton,
   Select,
   Stepper,
@@ -27,9 +31,15 @@ import {
 import { useNavigate } from 'react-router';
 import * as z from 'zod';
 
+const DATASET_KIND_LABELS: Record<string, string> = {
+  'object-detection': '객체 감지',
+  'protein-classification': '단백질 분류',
+};
+
 const schema = z.object({
   train_name: z.string().min(1, '이름은 필수입니다.'),
   description: z.string().optional(),
+  dataset_kind: z.string().min(1, '데이터 유형을 선택해주세요.'),
   source_type: z.enum(['upload', 'select']),
   dataset_id: z.number({ error: '데이터 셋을 선택해주세요.' }).optional(),
   model_id: z.number({ error: '모델을 선택해주세요.' }),
@@ -72,6 +82,7 @@ export default function LearningCreatePage() {
     defaultValues: {
       train_name: '',
       description: '',
+      dataset_kind: 'object-detection',
       source_type: 'select',
       epochs: '5',
       batch_size: '32',
@@ -140,7 +151,7 @@ export default function LearningCreatePage() {
         const formData = new FormData();
         formData.append('name', data.train_name);
         formData.append('description', data.description ?? '');
-        formData.append('dataset_kind', 'object-detection');
+        formData.append('dataset_kind', data.dataset_kind);
         formData.append('file', uploadedFile);
         const dataset = await createDataset(formData);
         datasetId = dataset.id;
@@ -316,17 +327,36 @@ const Step2 = ({
   isFileValidated,
   setIsFileValidated,
 }: Step2Props) => {
-  const { control } = useFormContext<FormValues>();
+  const { control, setValue } = useFormContext<FormValues>();
   const toast = useToast();
   const { datasets, isPending } = useGetDatasets({ size: 100 });
+  const { kinds } = useGetDatasetKinds();
   const { validateDataset } = useValidateDataset();
   const sourceType = useWatch({ control, name: 'source_type' });
+  const selectedKind = useWatch({ control, name: 'dataset_kind' });
   const [isValidating, setIsValidating] = useState(false);
 
+  const kindOptions = useMemo(() => {
+    const names =
+      kinds.length > 0 ? kinds.map((kind) => kind.name) : Object.keys(DATASET_KIND_LABELS);
+    return names.map((name) => ({ label: DATASET_KIND_LABELS[name] ?? name, value: name }));
+  }, [kinds]);
+
+  // 선택한 유형의 데이터셋만 노출한다. size: 100으로 받은 범위 안에서만 거르므로,
+  // 데이터셋이 그보다 많아지면 서버 쪽 kind 파라미터가 필요하다.
   const datasetOptions = useMemo(
-    () => datasets.map((d) => ({ text: d.name, value: d.id })),
-    [datasets]
+    () =>
+      datasets.filter((d) => d.kind === selectedKind).map((d) => ({ text: d.name, value: d.id })),
+    [datasets, selectedKind]
   );
+
+// 데이터 유형을 바꾸면 데이터셋 선택값과 업로드 파일을 초기화한다.
+  const handleChangeKind = (kind: string) => {
+    setValue('dataset_kind', kind);
+    setValue('dataset_id', undefined);
+    setUploadedFile(null);
+    setIsFileValidated(false);
+  };
 
   const handleValidate = async () => {
     if (!uploadedFile) {
@@ -341,7 +371,7 @@ const Step2 = ({
     try {
       const formData = new FormData();
       formData.append('file', uploadedFile);
-      formData.append('dataset_kind', 'object-detection');
+      formData.append('dataset_kind', selectedKind);
       const response = await validateDataset(formData);
       setIsFileValidated(response.is_valid);
       toast.open({
@@ -370,11 +400,14 @@ const Step2 = ({
         <div className="page-input_item-box">
           <div className="page-input_item-name page-icon-requisite">데이터 유형</div>
           <div className="page-input_item-data">
-            <div className="page-input_item_round-box">
-              <div className="page-input_item_round-name">이미지 데이터 셋</div>
-              <div className="page-input_item_round-data">
-                <RadioButton id="type-object" label="객체감지" value="object" checked readOnly />
-              </div>
+            <div className="page-input_item-col2">
+              <RadioGroupButton
+                id="dataset-kind"
+                options={kindOptions}
+                orientation="vertical"
+                value={selectedKind}
+                onValueChange={handleChangeKind}
+              />
             </div>
           </div>
         </div>
@@ -459,7 +492,13 @@ const Step2 = ({
                     onChange={(option: { text: string; value: number } | null) =>
                       field.onChange(option?.value)
                     }
-                    placeholder={isPending ? '불러오는 중...' : '데이터 셋을 선택해주세요.'}
+                    placeholder={
+                      isPending
+                        ? '불러오는 중...'
+                        : datasetOptions.length === 0
+                          ? '해당 유형의 데이터 셋이 없습니다.'
+                          : '데이터 셋을 선택해주세요.'
+                    }
                     errMessage={fieldState.error?.message}
                   />
                 )}
@@ -635,7 +674,9 @@ const Step4 = ({ uploadedFile }: Step4Props) => {
         <div>
           <div className="page-accordion_item-box">
             <div className="page-accordion_item-name">데이터 유형</div>
-            <div className="page-accordion_item-data">객체 감지</div>
+            <div className="page-accordion_item-data">
+              {DATASET_KIND_LABELS[values.dataset_kind ?? ''] ?? '-'}
+            </div>
           </div>
           <div className="page-accordion_item-box">
             <div className="page-accordion_item-name">

@@ -345,6 +345,17 @@ vi.mock('@innogrid/ui', async () => {
       />
     ),
 
+    // 진행 단계 표시만 하는 경량 목 — 현재 단계에 aria-current를 달아 단언에 쓴다
+    Stepper: ({ step = 0, steps = [] }: { step?: number; steps?: { title?: string }[] }) => (
+      <ol>
+        {steps.map((item, i) => (
+          <li key={i} aria-current={i === step ? 'step' : undefined}>
+            {item.title}
+          </li>
+        ))}
+      </ol>
+    ),
+
     // 모든 아이템을 펼친 상태로 렌더링하는 경량 목 — 접기/펼치기 상태 로직은 생략
     Accordion: ({
       components = [],
