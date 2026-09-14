@@ -245,7 +245,12 @@ export const DatasetForm = () => {
         <div className="page-footer_btn-box">
           <div />
           <div>
-            <Button size="large" color="secondary" onClick={() => navigate('/dataset')}>
+            <Button
+              type="button"
+              size="large"
+              color="secondary"
+              onClick={() => navigate('/dataset')}
+            >
               취소
             </Button>
             <Button

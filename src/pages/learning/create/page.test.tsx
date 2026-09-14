@@ -24,21 +24,40 @@ vi.mock('react-router', async () => ({
 const kindsResponse = [
   {
     name: 'object-detection',
-    description: '이미지 객체 감지',
-    accepted_formats: ['zip'],
-    supported_models: [],
+    description: '객체 감지(YOLOX) 데이터셋',
+    accepted_formats: ['standard-jsonl', 'coco'],
+    supported_models: ['yolox_s', 'yolox_m'],
   },
   {
     name: 'protein-classification',
-    description: '단백질 서열 분류',
-    accepted_formats: ['zip'],
-    supported_models: [],
+    description: '단백질 서열 분류(ESM2) 데이터셋',
+    accepted_formats: ['standard-jsonl', 'csv'],
+    supported_models: ['facebook/esm2_t6_8M_UR50D'],
   },
 ];
 
 const datasetsResponse = [
   { id: 1, name: '객체 데이터셋', kind: 'object-detection' },
   { id: 2, name: '단백질 데이터셋', kind: 'protein-classification' },
+];
+
+// rf-detr-large는 task가 object-detection이지만 서빙 전용이라 supported_models에 없다.
+// task로 필터하면 통과해버리는 사례라 회귀 방지용으로 목에 포함한다.
+const modelsResponse = [
+  { id: 11, name: 'yolox_s', task: 'object-detection', learning_enable_yn: true },
+  { id: 12, name: 'yolox_m', task: 'object-detection', learning_enable_yn: true },
+  {
+    id: 13,
+    name: 'facebook/esm2_t6_8M_UR50D',
+    task: 'protein-classification',
+    learning_enable_yn: true,
+  },
+  {
+    id: 14,
+    name: 'Roboflow/rf-detr-large',
+    task: 'object-detection',
+    learning_enable_yn: false,
+  },
 ];
 
 beforeEach(() => {
@@ -50,6 +69,14 @@ beforeEach(() => {
         page: 1,
         size: 100,
         total: datasetsResponse.length,
+      })
+    ),
+    http.get(`${BASE_URL}/models`, () =>
+      HttpResponse.json({
+        data: modelsResponse,
+        page: 1,
+        size: 100,
+        total: modelsResponse.length,
       })
     )
   );
@@ -136,6 +163,70 @@ describe('LearningCreatePage — 데이터 유형', () => {
     });
   });
 
+  describe('모델 목록 필터링', () => {
+    /** 2단계에서 데이터셋까지 고르고 3단계(모델 설정)로 넘어간다 */
+    const goToModelStep = async (user: User, kindLabel: string, datasetValue: string) => {
+      await user.click(screen.getByRole('radio', { name: kindLabel }));
+      await user.selectOptions(await screen.findByLabelText('데이터 셋을 선택해주세요.'), datasetValue);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      return screen.findByLabelText('모델을 선택해주세요.');
+    };
+
+    it('선택한 유형의 supported_models에 있는 모델만 노출한다', async () => {
+      const { user } = renderWithUser(<LearningCreatePage />);
+      await goToDataStep(user);
+      await goToModelStep(user, '객체 감지', '1');
+
+      expect(await screen.findByRole('option', { name: 'yolox_s' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'yolox_m' })).toBeInTheDocument();
+      expect(
+        screen.queryByRole('option', { name: 'facebook/esm2_t6_8M_UR50D' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('task가 같아도 supported_models에 없는 서빙 전용 모델은 제외한다', async () => {
+      const { user } = renderWithUser(<LearningCreatePage />);
+      await goToDataStep(user);
+      await goToModelStep(user, '객체 감지', '1');
+
+      await screen.findByRole('option', { name: 'yolox_s' });
+      expect(
+        screen.queryByRole('option', { name: 'Roboflow/rf-detr-large' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('유형을 바꾸면 이미 선택한 모델이 초기화된다', async () => {
+      const { user } = renderWithUser(<LearningCreatePage />);
+      await goToDataStep(user);
+      const modelSelect = await goToModelStep(user, '객체 감지', '1');
+
+      await user.selectOptions(modelSelect, '11');
+      expect(modelSelect).toHaveValue('11');
+
+      await user.click(screen.getByRole('button', { name: '이전' }));
+      await user.click(await screen.findByRole('radio', { name: '단백질 분류' }));
+      await user.selectOptions(await screen.findByLabelText('데이터 셋을 선택해주세요.'), '2');
+      await user.click(screen.getByRole('button', { name: '다음' }));
+
+      expect(await screen.findByLabelText('모델을 선택해주세요.')).toHaveValue('');
+    });
+
+    it('supported_models가 비어 있으면 필터하지 않는다', async () => {
+      server.use(
+        http.get(`${BASE_URL}/datasets/kinds`, () =>
+          HttpResponse.json(kindsResponse.map((kind) => ({ ...kind, supported_models: [] })))
+        )
+      );
+      const { user } = renderWithUser(<LearningCreatePage />);
+      await goToDataStep(user);
+      await goToModelStep(user, '객체 감지', '1');
+
+      expect(
+        await screen.findByRole('option', { name: 'Roboflow/rf-detr-large' })
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('업로드 경로의 dataset_kind 전송', () => {
     it('유효성 검증 요청에 선택한 유형을 보낸다', async () => {
       const postSpy = vi.spyOn(api, 'post');
@@ -168,7 +259,7 @@ describe('LearningCreatePage — 데이터 유형', () => {
 
       const postSpy = vi.spyOn(api, 'post');
       await user.click(screen.getByRole('button', { name: '다음' }));
-      await user.selectOptions(await screen.findByLabelText('모델을 선택해주세요.'), '11');
+      await user.selectOptions(await screen.findByLabelText('모델을 선택해주세요.'), '13');
       await user.click(screen.getByRole('button', { name: '다음' }));
       await user.click(await screen.findByRole('button', { name: '생성' }));
 
@@ -192,7 +283,7 @@ describe('LearningCreatePage — 데이터 유형', () => {
       await user.click(screen.getByRole('radio', { name: '단백질 분류' }));
       await user.selectOptions(await screen.findByLabelText('데이터 셋을 선택해주세요.'), '2');
       await user.click(screen.getByRole('button', { name: '다음' }));
-      await user.selectOptions(await screen.findByLabelText('모델을 선택해주세요.'), '11');
+      await user.selectOptions(await screen.findByLabelText('모델을 선택해주세요.'), '13');
       await user.click(screen.getByRole('button', { name: '다음' }));
 
       expect(await screen.findByText('단백질 분류')).toBeInTheDocument();
