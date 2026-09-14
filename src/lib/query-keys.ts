@@ -359,4 +359,163 @@ export const queryKeys = {
     list: (params: Record<string, string | number> = {}) =>
       [...queryKeys.auditLogs.all, params] as const,
   },
+  // ============= 인프라(any-cloud) 도메인 =============
+  clusters: {
+    all: ['clusters'] as const,
+    list: (params: GetClustersParams = {}) => [...queryKeys.clusters.all, params] as const,
+    // useGetCluster 는 clusterId, 무효화 지점은 clusterName 을 쓰는 곳도 있어 둘 다 수용
+    detail: (clusterIdOrName?: string) =>
+      [...queryKeys.clusters.all, 'detail', clusterIdOrName] as const,
+    health: (clusterName?: string) => [...queryKeys.clusters.all, 'health', clusterName] as const,
+    operations: (clusterName?: string, params?: Record<string, string>) =>
+      [...queryKeys.clusters.all, 'operations', clusterName, params] as const,
+    stateHistory: (clusterName?: string) =>
+      [...queryKeys.clusters.all, 'state-history', clusterName] as const,
+    resourceKinds: (clusterName?: string) =>
+      [...queryKeys.clusters.all, 'resource-kinds', clusterName] as const,
+  },
+  kubernetes: {
+    all: ['kubernetes'] as const,
+    nodes: kubernetesKind('nodes'),
+    namespaces: kubernetesKind('namespaces'),
+    deployments: kubernetesKind('deployments'),
+    replicaSets: kubernetesKind('replicasets'),
+    pods: kubernetesKind('pods'),
+    services: kubernetesKind('services'),
+    daemonSets: kubernetesKind('daemonsets'),
+    gpuSchedulings: kubernetesKind('gpu-schedulings'),
+    serviceAccounts: kubernetesKind('service-accounts'),
+    configMaps: kubernetesKind('config-maps'),
+    secrets: kubernetesKind('secrets'),
+    // 'pods' prefix 무효화에 휩쓸리지 않도록 별도 세그먼트 유지
+    podsBySelector: (clusterName?: string, namespace?: string, labelSelector?: string) =>
+      [...queryKeys.kubernetes.all, 'pods-by-selector', clusterName, namespace, labelSelector] as const,
+    resource: {
+      all: ['kubernetes', 'resource'] as const,
+      detail: (
+        resourceType?: string,
+        resourceName?: string,
+        clusterName?: string,
+        namespace?: string
+      ) =>
+        [...queryKeys.kubernetes.resource.all, resourceType, resourceName, clusterName, namespace] as const,
+    },
+    events: {
+      all: ['kubernetes', 'events'] as const,
+      list: (
+        resourceType?: string,
+        resourceName?: string,
+        clusterName?: string,
+        namespace?: string
+      ) =>
+        [...queryKeys.kubernetes.events.all, resourceType, resourceName, clusterName, namespace] as const,
+    },
+    podLogs: (
+      clusterName?: string,
+      namespace?: string,
+      podName?: string,
+      options?: { tailLines?: number; container?: string; enabled?: boolean }
+    ) => [...queryKeys.kubernetes.all, 'pod-logs', clusterName, namespace, podName, options] as const,
+  },
+  vms: {
+    all: ['vms'] as const,
+    list: (params: Record<string, string> = {}) => [...queryKeys.vms.all, params] as const,
+    detail: (vmName?: string) => [...queryKeys.vms.all, 'detail', vmName] as const,
+    // detail(vmName) 하위 prefix — detail 무효화가 operations/stateHistory/nodes 를 함께 커버
+    operations: (vmName?: string, pageSize?: number) =>
+      [...queryKeys.vms.detail(vmName), 'operations', pageSize] as const,
+    stateHistory: (vmName?: string, pageSize?: number) =>
+      [...queryKeys.vms.detail(vmName), 'state-history', pageSize] as const,
+    nodes: (vmName?: string) => [...queryKeys.vms.detail(vmName), 'nodes'] as const,
+  },
+  credentials: {
+    all: ['credentials'] as const,
+    list: (params?: { provider?: string }) => [...queryKeys.credentials.all, params] as const,
+    detail: (credentialId?: string) =>
+      [...queryKeys.credentials.all, 'detail', credentialId] as const,
+  },
+  operations: {
+    all: ['operations'] as const,
+    list: (params: Record<string, unknown> = {}) => [...queryKeys.operations.all, params] as const,
+    detail: (operationId?: string) => [...queryKeys.operations.all, 'detail', operationId] as const,
+  },
+  // model 도메인의 modelProviders.all(['providers'])와 prefix 충돌하지 않도록 'infra-providers' 사용
+  infraProviders: {
+    all: ['infra-providers'] as const,
+    regions: (provider?: string, credentialId?: string) =>
+      [...queryKeys.infraProviders.all, 'regions', provider, credentialId] as const,
+    specs: (params: ProviderSpecsKeyParams = {}) =>
+      [...queryKeys.infraProviders.all, 'specs', params] as const,
+    images: (params: ProviderImagesKeyParams = {}) =>
+      [...queryKeys.infraProviders.all, 'images', params] as const,
+    configSchema: (provider?: string) =>
+      [...queryKeys.infraProviders.all, 'config-schema', provider] as const,
+  },
+  addons: {
+    catalog: ['addon-catalog'] as const,
+    all: ['cluster-addons'] as const,
+    byCluster: (clusterName?: string) => [...queryKeys.addons.all, clusterName] as const,
+    // byCluster(clusterName) 하위 prefix — 클러스터 단위 무효화가 detail 을 함께 커버
+    detail: (clusterName?: string, addonId?: string) =>
+      [...queryKeys.addons.byCluster(clusterName), 'detail', addonId] as const,
+  },
+  catalog: {
+    all: ['catalog'] as const,
+    list: (repoName?: string) => [...queryKeys.catalog.all, repoName] as const,
+    detail: (repoName?: string, chartName?: string, version?: string) =>
+      [...queryKeys.catalog.all, 'detail', repoName, chartName, version] as const,
+    readme: (repoName?: string, chartName?: string, version?: string) =>
+      [...queryKeys.catalog.all, 'readme', repoName, chartName, version] as const,
+    values: (repoName?: string, chartName?: string, version?: string) =>
+      [...queryKeys.catalog.all, 'values', repoName, chartName, version] as const,
+  },
+  helmReleases: {
+    all: ['helm-releases'] as const,
+    list: (params: Record<string, string | number> = {}) =>
+      [...queryKeys.helmReleases.all, params] as const,
+    resources: (releaseName?: string, clusterId?: string, namespace?: string) =>
+      [...queryKeys.helmReleases.all, 'resources', releaseName, clusterId, namespace] as const,
+    values: (releaseName?: string) =>
+      [...queryKeys.helmReleases.all, 'values', releaseName] as const,
+  },
+  helmRepositories: {
+    all: ['helm-repositories'] as const,
+    list: (params: Record<string, string | number> = {}) =>
+      [...queryKeys.helmRepositories.all, 'list', params] as const,
+    detail: (name?: string) => [...queryKeys.helmRepositories.all, 'detail', name] as const,
+    exists: (name?: string) => [...queryKeys.helmRepositories.all, 'exists', name] as const,
+  },
+  monitoring: {
+    all: ['monitoring'] as const,
+    instant: (query?: string, clusterName?: string) =>
+      [...queryKeys.monitoring.all, 'instant', query, clusterName] as const,
+    range: (clusterName?: string, query?: string, start?: number, end?: number, step?: number) =>
+      [...queryKeys.monitoring.all, 'range', clusterName, query, start, end, step] as const,
+    multi: (clusterName?: string, signature?: string) =>
+      [...queryKeys.monitoring.all, 'multi', clusterName, signature] as const,
+    podsResource: (clusterName?: string, namespace?: string) =>
+      [...queryKeys.monitoring.all, 'pods-resource', clusterName, namespace] as const,
+  },
+  observability: {
+    all: ['observability'] as const,
+    targets: (clusterName?: string) =>
+      [...queryKeys.observability.all, 'targets', clusterName] as const,
+    alerts: (clusterName?: string) =>
+      [...queryKeys.observability.all, 'alerts', clusterName] as const,
+    alertSilences: (clusterName?: string) =>
+      [...queryKeys.observability.all, 'alert-silences', clusterName] as const,
+    alertRules: () => [...queryKeys.observability.all, 'alert-rules'] as const,
+    dashboard: (clusterName?: string) =>
+      [...queryKeys.observability.all, 'dashboard', clusterName] as const,
+    standardMetric: (clusterName?: string, metric?: string, params?: Record<string, string>) =>
+      [...queryKeys.observability.all, 'standard-metric', clusterName, metric, params] as const,
+  },
+  adminAgents: {
+    all: ['admin-agents'] as const,
+  },
+  auditLogs: {
+    all: ['audit-logs'] as const,
+    list: (params: Record<string, string | number> = {}) =>
+      [...queryKeys.auditLogs.all, params] as const,
+  },
 };
