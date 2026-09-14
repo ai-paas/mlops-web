@@ -17,7 +17,8 @@ export default defineConfig((configEnv) =>
         clearMocks: true,
         // 실제 @innogrid/ui Table(가상화)과 lazy 라우트를 렌더하는 테스트가 병렬 부하에서
         // 기본값 5000ms를 넘겨 간헐 실패했다. 파일이 늘 때마다 재발하므로 여유를 둔다.
-        testTimeout: 15000,
+        // waitFor(10s)가 한 테스트에서 두 번 이어질 수 있으므로 그보다 넉넉하게 잡는다.
+        testTimeout: 25000,
         server: {
           deps: {
             // @innogrid/ui가 CSS를 import하므로 vite 파이프라인으로 인라인 처리

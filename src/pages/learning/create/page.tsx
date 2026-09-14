@@ -327,7 +327,7 @@ const Step2 = ({
   isFileValidated,
   setIsFileValidated,
 }: Step2Props) => {
-  const { control, setValue } = useFormContext<FormValues>();
+  const { control, setValue, resetField } = useFormContext<FormValues>();
   const toast = useToast();
   const { datasets, isPending } = useGetDatasets({ size: 100 });
   const { kinds } = useGetDatasetKinds();
@@ -350,10 +350,11 @@ const Step2 = ({
     [datasets, selectedKind]
   );
 
-// 데이터 유형을 바꾸면 데이터셋 선택값과 업로드 파일을 초기화한다.
+  // 데이터 유형을 바꾸면 데이터셋 선택값과 업로드 파일, 모델 선택을 초기화한다.
   const handleChangeKind = (kind: string) => {
     setValue('dataset_kind', kind);
     setValue('dataset_id', undefined);
+    resetField('model_id');
     setUploadedFile(null);
     setIsFileValidated(false);
   };
@@ -518,8 +519,16 @@ const Step3 = () => {
     formState: { errors },
   } = useFormContext<FormValues>();
   const { models, isPending } = useGetModels({ size: 100 }, {});
+  const { kinds } = useGetDatasetKinds();
+  const selectedKind = useWatch({ control, name: 'dataset_kind' });
 
-  const modelOptions = useMemo(() => models.map((m) => ({ text: m.name, value: m.id })), [models]);
+  // 선택한 유형의 모델만 노출한다. 목록이 비면 모든 모델을 노출한다. 
+  const modelOptions = useMemo(() => {
+    const supported = kinds.find((kind) => kind.name === selectedKind)?.supported_models ?? [];
+    return models
+      .filter((m) => supported.length === 0 || supported.includes(m.name))
+      .map((m) => ({ text: m.name, value: m.id }));
+  }, [models, kinds, selectedKind]);
 
   return (
     <div className="page-content page-pb-40">
@@ -540,7 +549,13 @@ const Step3 = () => {
                   onChange={(option: { text: string; value: number } | null) =>
                     field.onChange(option?.value)
                   }
-                  placeholder={isPending ? '불러오는 중...' : '모델을 선택해주세요.'}
+                  placeholder={
+                    isPending
+                      ? '불러오는 중...'
+                      : modelOptions.length === 0
+                        ? '해당 유형으로 학습 가능한 모델이 없습니다.'
+                        : '모델을 선택해주세요.'
+                  }
                   errMessage={fieldState.error?.message}
                 />
               )}

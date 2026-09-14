@@ -221,6 +221,37 @@ describe('DatasetForm', () => {
   });
 
   describe('폼 제출', () => {
+    // 회귀: 취소 버튼에 type이 없으면 form 안에서 기본값 submit으로 동작해
+    // 목록으로 이동하면서 생성 요청까지 함께 나갔다.
+    it('폼을 모두 채운 뒤 취소를 누르면 생성 요청 없이 목록으로만 이동한다', async () => {
+      const postSpy = vi.spyOn(api, 'post').mockImplementation(
+        (url) =>
+          ({
+            json: () =>
+              Promise.resolve(
+                url === 'datasets/validate'
+                  ? { is_valid: true, message: 'OK' }
+                  : { id: 99, name: '새 데이터셋' }
+              ),
+          }) as ReturnType<typeof api.post>
+      );
+      const { user } = renderWithUser(<DatasetForm />);
+
+      await user.type(screen.getByPlaceholderText('이름을 입력해주세요.'), '학습 데이터셋');
+      await selectKind(user);
+      await user.upload(screen.getByLabelText('파일 업로드'), makeZip());
+      await screen.findByText('data.zip');
+
+      await user.click(screen.getByRole('button', { name: '취소' }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/dataset');
+      });
+      expect(postSpy.mock.calls.filter(([url]) => url === 'datasets')).toHaveLength(0);
+
+      postSpy.mockRestore();
+    });
+
     it('이름·분류·검증된 파일로 제출하면 FormData 본문으로 생성 요청 후 목록으로 이동한다', async () => {
       const postSpy = vi.spyOn(api, 'post').mockImplementation(
         (url) =>
