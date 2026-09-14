@@ -8,7 +8,8 @@ import { server } from './mocks/server';
 
 // waitFor 기본 1s는 커버리지 계측 + 병렬 실행 부하에서 간헐 타임아웃을 일으킨다
 // (성공 테스트는 조건 충족 즉시 통과하므로 상향해도 정상 케이스는 느려지지 않는다)
-configure({ asyncUtilTimeout: 3000 });
+// 3s도 lazy 라우트 + 실제 Table 렌더가 겹치면 부족해 5s로 올렸다.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom 환경의 fetch/Request는 Node(undici) 구현이라 브라우저와 달리 상대 URL을
 // 해석하지 못한다. 앱 코드(ky prefixUrl '/api/v1', refresh fetch)는 상대 경로를
