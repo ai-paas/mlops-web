@@ -1,5 +1,5 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 import { BASE_URL } from '@/test/mocks/handlers';
@@ -8,8 +8,10 @@ import { queryKeys } from '@/lib/query-keys';
 import {
   useCreateModel,
   useDeleteModel,
+  useDownloadModelFile,
   useGetCustomModels,
   useGetHubModels,
+  useGetModelFiles,
   useGetModels,
 } from './models';
 
@@ -20,6 +22,8 @@ import {
 const seedCaches = (queryClient: ReturnType<typeof createTestQueryClient>) => {
   queryClient.setQueryData(queryKeys.models.detail(11), { id: 11, name: '커스텀 모델 A' });
   queryClient.setQueryData(queryKeys.models.detail(12), { id: 12, name: '커스텀 모델 B' });
+  // 파일 목록은 detail(id) 하위 계층 — detail 제거/무효화가 함께 덮어야 한다
+  queryClient.setQueryData(queryKeys.models.files(11, { page: 1 }), { data: [], total: 0 });
   queryClient.setQueryData(queryKeys.models.list({ page: 1 }), { data: [], total: 0 });
   queryClient.setQueryData(queryKeys.modelCatalogs.list(), { data: [], total: 0 });
   queryClient.setQueryData(queryKeys.customModels.list(), { data: [], total: 0 });
@@ -47,6 +51,8 @@ describe('models hooks — a3dd1d4 캐시 무효화 계약', () => {
 
       // removeQueries — 캐시 엔트리 자체가 사라진다
       expect(queryClient.getQueryState(queryKeys.models.detail(11))).toBeUndefined();
+      // 파일 목록 키가 detail 하위 계층이라 별도 처리 없이 함께 제거된다
+      expect(queryClient.getQueryState(queryKeys.models.files(11, { page: 1 }))).toBeUndefined();
     });
 
     it('다른 모델의 detail은 제거되지 않고 models.all 계층 무효화로 stale 처리된다', async () => {
@@ -262,5 +268,161 @@ describe('models hooks — OpenAPI 요청/응답 계약', () => {
     expect(result.current.page).toEqual({ number: 1, size: 30, total: 0 });
     expect(result.current.hasMore).toBe(false);
     expect(result.current.totalIsExact).toBe(true);
+  });
+});
+
+// ============================================
+// 모델 파일 목록·다운로드
+// ============================================
+
+describe('useGetModelFiles', () => {
+  it('파일 목록과 페이지 정보를 반환한다', async () => {
+    const { result } = renderHook(() => useGetModelFiles(11), {
+      wrapper: createHookWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+
+    expect(result.current.modelFiles).toHaveLength(2);
+    expect(result.current.modelFiles[0].name).toBe('README.md');
+    expect(result.current.page.total).toBe(2);
+  });
+
+  it('page·size·sort를 쿼리 파라미터로 그대로 보낸다', async () => {
+    let receivedParams: URLSearchParams | undefined;
+    server.use(
+      http.get(`${BASE_URL}/models/:modelId/files`, ({ request }) => {
+        receivedParams = new URL(request.url).searchParams;
+        return HttpResponse.json({ data: [], total: 0, page: 2, size: 20 });
+      })
+    );
+
+    const { result } = renderHook(
+      () => useGetModelFiles(11, { page: 2, size: 20, sort: '-size_bytes' }),
+      { wrapper: createHookWrapper() }
+    );
+
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(Object.fromEntries(receivedParams ?? [])).toEqual({
+      page: '2',
+      size: '20',
+      sort: '-size_bytes',
+    });
+  });
+
+  it('modelId가 없으면(0) 요청하지 않는다', async () => {
+    const requestSpy = vi.fn();
+    server.use(
+      http.get(`${BASE_URL}/models/:modelId/files`, () => {
+        requestSpy();
+        return HttpResponse.json({ data: [], total: 0, page: 1, size: 20 });
+      })
+    );
+
+    renderHook(() => useGetModelFiles(0), { wrapper: createHookWrapper() });
+
+    await waitFor(() => expect(requestSpy).not.toHaveBeenCalled());
+  });
+
+  it('빈 목록(OLLAMA·NONE 모델)은 오류가 아니라 빈 배열로 돌려준다', async () => {
+    server.use(
+      http.get(`${BASE_URL}/models/:modelId/files`, () =>
+        HttpResponse.json({ data: [], total: 0, page: 1, size: 20 })
+      )
+    );
+
+    const { result } = renderHook(() => useGetModelFiles(11), {
+      wrapper: createHookWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+
+    expect(result.current.isError).toBe(false);
+    expect(result.current.modelFiles).toEqual([]);
+    expect(result.current.page.total).toBe(0);
+  });
+
+  it('조회 실패는 isError로 알린다', async () => {
+    server.use(
+      http.get(`${BASE_URL}/models/:modelId/files`, () =>
+        HttpResponse.json({ detail: '스토리지를 사용할 수 없습니다.' }, { status: 502 })
+      )
+    );
+
+    const { result } = renderHook(() => useGetModelFiles(11), {
+      wrapper: createHookWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.modelFiles).toEqual([]);
+  });
+});
+
+describe('useDownloadModelFile', () => {
+  /** 앵커 클릭을 가로채 이동할 URL만 기록한다 (jsdom은 실제 내비게이션을 못 한다) */
+  const spyAnchorClick = () => {
+    const hrefs: string[] = [];
+    const spy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        hrefs.push(this.href);
+      });
+    return { hrefs, spy };
+  };
+
+  it('/api/v1 접두사를 떼고 발급 API를 호출한 뒤 서명 URL로 이동한다', async () => {
+    let requestedUrl: URL | undefined;
+    server.use(
+      http.get(`${BASE_URL}/models/:modelId/files/download-url`, ({ request }) => {
+        requestedUrl = new URL(request.url);
+        return HttpResponse.json({
+          model_id: 11,
+          name: 'README.md',
+          size_bytes: 4721,
+          download_url: 'http://storage.test/signed/README.md?X-Amz-Signature=abc',
+          expires_at: '2026-09-15T00:32:03.291043Z',
+        });
+      })
+    );
+    const { hrefs, spy } = spyAnchorClick();
+
+    try {
+      const { result } = renderHook(() => useDownloadModelFile(), {
+        wrapper: createHookWrapper(),
+      });
+
+      result.current.downloadModelFile('/api/v1/models/11/files/download-url?name=README.md');
+
+      await waitFor(() => expect(hrefs).toHaveLength(1));
+
+      // 경로와 name 쿼리가 목록 응답 그대로 전달된다
+      expect(requestedUrl?.pathname).toBe('/api/v1/models/11/files/download-url');
+      expect(requestedUrl?.searchParams.get('name')).toBe('README.md');
+      expect(hrefs[0]).toBe('http://storage.test/signed/README.md?X-Amz-Signature=abc');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('발급 실패 시 이동하지 않고 에러를 알린다', async () => {
+    server.use(
+      http.get(`${BASE_URL}/models/:modelId/files/download-url`, () =>
+        HttpResponse.json({ detail: '파일을 찾을 수 없습니다.' }, { status: 404 })
+      )
+    );
+    const { hrefs, spy } = spyAnchorClick();
+
+    try {
+      const { result } = renderHook(() => useDownloadModelFile(), {
+        wrapper: createHookWrapper(),
+      });
+
+      result.current.downloadModelFile('/api/v1/models/11/files/download-url?name=missing.txt');
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      expect(hrefs).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

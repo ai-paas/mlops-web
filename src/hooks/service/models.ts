@@ -9,6 +9,7 @@ import type {
   GetHubModelsParams,
   GetImprovementTaskTypesParams,
   GetModelCatalogsParams,
+  GetModelFilesParams,
   GetModelFormatsParams,
   GetModelProvidersParams,
   GetModelsParams,
@@ -18,6 +19,8 @@ import type {
   ImprovementStatusResponse,
   Model,
   ModelCatalog,
+  ModelFile,
+  ModelFileDownloadUrl,
   ModelFormat,
   ModelImprovementTaskType,
   ModelProvider,
@@ -167,6 +170,52 @@ export const useGetModel = <T = Model>(model_id: number) => {
     isError,
     error,
   };
+};
+
+/** 모델의 저장 파일 목록. 서버 페이지네이션·정렬(sort는 '-' 접두사로 내림차순). */
+export const useGetModelFiles = (modelId: number, params: GetModelFilesParams = {}) => {
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: queryKeys.models.files(modelId, params),
+    queryFn: () =>
+      api.get<Page<ModelFile>>(`models/${modelId}/files`, { searchParams: { ...params } }).json(),
+    enabled: !!modelId,
+  });
+
+  return {
+    modelFiles: data?.data ?? [],
+    page: {
+      number: data?.page ?? 1,
+      size: data?.size ?? 20,
+      total: data?.total ?? 0,
+    },
+    isPending,
+    isError,
+    error,
+  };
+};
+
+/**
+ * 모델 파일 다운로드. 발급받은 스토리지 서명 URL은 5분간 무인증 접근이 가능하므로
+ * 반환하지 않고 훅 안에서 즉시 소비한다(캐시·컴포넌트 상태에 남기지 않는다).
+ */
+export const useDownloadModelFile = () => {
+  const { mutate, isPending, isError, error } = useMutation({
+    // 목록 응답의 download_url을 그대로 받는다 (ky prefixUrl이 /api/v1이라 접두사만 제거)
+    mutationFn: async (downloadUrlPath: string) => {
+      const { download_url } = await api
+        .get(downloadUrlPath.replace(/^\/api\/v1\//, ''))
+        .json<ModelFileDownloadUrl>();
+
+      // 파일 본문을 JS 메모리에 적재하지 않도록 브라우저가 직접 URL로 이동하게 한다
+      const anchor = document.createElement('a');
+      anchor.href = download_url;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.click();
+    },
+  });
+
+  return { downloadModelFile: mutate, isPending, isError, error };
 };
 
 export const useDeleteModel = () => {
@@ -354,3 +403,5 @@ export const useGetImprovementStatus = (
     error,
   };
 };
+
+

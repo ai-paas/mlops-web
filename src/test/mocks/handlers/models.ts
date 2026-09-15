@@ -34,6 +34,22 @@ export const mockModelFormats = [
   { id: 2, name: 'gguf', description: '' },
 ];
 
+// download_url은 파일 주소가 아니라 서명 URL을 발급받는 게이트웨이 경로다
+export const mockModelFiles = [
+  {
+    name: 'README.md',
+    size_bytes: 4721,
+    last_modified: '2026-09-14T03:31:31.253000Z',
+    download_url: '/api/v1/models/11/files/download-url?name=README.md',
+  },
+  {
+    name: 'model.safetensors',
+    size_bytes: 135795376,
+    last_modified: '2026-09-14T03:33:22.252000Z',
+    download_url: '/api/v1/models/11/files/download-url?name=model.safetensors',
+  },
+];
+
 export const mockImprovementTaskTypes = [
   { name: 'tensorrt', category: 'optimization', description: 'TensorRT 변환' },
   { name: 'openvino', category: 'optimization', description: 'OpenVINO 변환' },
@@ -47,6 +63,18 @@ export const modelHandlers = [
   http.get(`${BASE_URL}/models/providers`, () => HttpResponse.json(toPage(mockModelProviders))),
   http.get(`${BASE_URL}/models/types`, () => HttpResponse.json(toPage(mockModelTypes))),
   http.get(`${BASE_URL}/models/formats`, () => HttpResponse.json(toPage(mockModelFormats))),
+  // 더 구체적인 경로를 먼저 등록한다
+  http.get(`${BASE_URL}/models/:modelId/files/download-url`, ({ request }) => {
+    const name = new URL(request.url).searchParams.get('name') ?? '';
+    return HttpResponse.json({
+      model_id: 11,
+      name,
+      size_bytes: 4721,
+      download_url: `http://storage.test/signed/${encodeURIComponent(name)}`,
+      expires_at: '2026-09-15T00:32:03.291043Z',
+    });
+  }),
+  http.get(`${BASE_URL}/models/:modelId/files`, () => HttpResponse.json(toPage(mockModelFiles))),
   http.get(`${BASE_URL}/models`, () => HttpResponse.json(toPage(mockModels))),
   http.post(`${BASE_URL}/models`, () => HttpResponse.json({ id: 99, name: '새 모델' })),
   http.delete(`${BASE_URL}/models/:modelId`, () => HttpResponse.json('deleted')),

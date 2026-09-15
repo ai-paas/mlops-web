@@ -1,73 +1,16 @@
+import { ModelFileTable } from '@/components/features/model/model-file-table';
 import { CodeBlock } from '@/components/ui/code-block';
 import { DetailValue } from '@/components/ui/detail-value';
 import { useGetModel } from '@/hooks/service/models';
 import type { ModelCatalog } from '@/types/model';
 import { formatDateTime } from '@/util/date';
-import {
-  BreadCrumb,
-  Button,
-  Table,
-  Tabs,
-  useTablePagination,
-  useTableSelection,
-  type Sorting,
-} from '@innogrid/ui';
-import { useState } from 'react';
+import { BreadCrumb, Tabs } from '@innogrid/ui';
 import { useNavigate, useParams } from 'react-router';
-
-interface FileRow {
-  name: string;
-  id: string;
-  state: string;
-  desc: string;
-}
-
-const columns = [
-  {
-    id: 'name',
-    header: '이름',
-    accessorFn: (row: FileRow) => row.name,
-    size: 425,
-  },
-  {
-    id: 'id',
-    header: '파일 크기',
-    accessorFn: (row: FileRow) => row.id,
-    size: 425,
-  },
-  {
-    id: 'state',
-    header: '업데이트 일시',
-    accessorFn: (row: FileRow) => row.state,
-    size: 425,
-  },
-  {
-    id: 'desc',
-    header: '다운로드',
-    accessorFn: (row: FileRow) => row.desc,
-    size: 434,
-    cell: () => <Button color="tertiary">버튼</Button>,
-    enableSorting: false,
-  },
-];
 
 export default function ModelCatalogDetailPage() {
   const { id } = useParams();
   const { model, isPending } = useGetModel<ModelCatalog>(Number(id));
   const navigate = useNavigate();
-
-  const { setRowSelection, rowSelection } = useTableSelection();
-  const { pagination, setPagination } = useTablePagination();
-  const [sorting, setSorting] = useState<Sorting>([{ id: 'name', desc: false }]);
-
-  const [rowData] = useState([
-    {
-      name: 'Model-00001-of-D0004. safetensors',
-      id: '워크플로우 001',
-      state: '4.43GB',
-      desc: '2025-12-31 10:12',
-    },
-  ]);
 
   return (
     <main>
@@ -174,24 +117,8 @@ export default function ModelCatalogDetailPage() {
           <Tabs
             labels={['파일', '샘플 코드']}
             components={[
-              <div className="tabs-Content">
-                <div>
-                  <Table
-                    useClientPagination
-                    useMultiSelect
-                    columns={columns}
-                    data={rowData}
-                    totalCount={rowData.length}
-                    pagination={pagination}
-                    setPagination={setPagination}
-                    rowSelection={rowSelection}
-                    setRowSelection={setRowSelection}
-                    setSorting={setSorting}
-                    sorting={sorting}
-                  />
-                </div>
-              </div>,
-              <div className="tabs-Content">
+              <ModelFileTable modelId={model?.id} key="files" />,
+              <div className="tabs-Content" key="sample-code">
                 <CodeBlock code={model?.sample_code ?? ''} />
               </div>,
             ]}

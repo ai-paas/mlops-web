@@ -287,6 +287,24 @@ export interface ImprovementStatusResponse {
   error: string | null;
 }
 
+/** 모델의 저장 파일 한 건 (MLflow 아티팩트) */
+export interface ModelFile {
+  name: string;
+  size_bytes: number;
+  last_modified: string;
+  /** 파일 주소가 아니라 서명 URL을 발급받는 게이트웨이 API 경로 */
+  download_url: string;
+}
+
+/** 다운로드 URL 발급 응답. download_url은 5분간 무인증 접근이 가능하므로 저장·로깅 금지. */
+export interface ModelFileDownloadUrl {
+  model_id: number;
+  name: string;
+  size_bytes: number;
+  download_url: string;
+  expires_at: string;
+}
+
 export interface GetModelsParams {
   page?: number;
   size?: number;
@@ -333,6 +351,13 @@ export interface GetModelFormatsParams {
   page?: number;
   size?: number;
   format_name?: string;
+}
+
+export interface GetModelFilesParams {
+  page?: number;
+  size?: number;
+  /** name·size_bytes·last_modified. 내림차순은 '-' 접두사 */
+  sort?: string;
 }
 
 export interface GetHubModelsParams {

@@ -34,10 +34,10 @@ export default defineConfig((configEnv) =>
           // 실행 간 편차(±1pt 관측)를 감안해 1.3pt 이상 여유를 둔다.
           // 커버리지가 오르면 임계값도 함께 올린다 — 내리는 변경은 금지.
           thresholds: {
-            statements: 31.8,
-            branches: 23.0,
-            functions: 28.5,
-            lines: 32.7,
+            statements: 33.5,
+            branches: 24.6,
+            functions: 30.3,
+            lines: 34.4,
           },
         },
       },
