@@ -20,9 +20,11 @@ import {
   YAxis,
 } from 'recharts';
 
-function formatMetric(value?: number | null, suffix = ''): string {
+// 지표는 서버가 주는 값을 그대로 보여준다. accuracy·precision·recall은 0~1 소수라
+// '%'를 붙이면 0.85가 0.85%로 읽혀 100배 작은 값처럼 보인다.
+function formatMetric(value?: number | null): string {
   if (value === undefined || value === null || Number.isNaN(value)) return '-';
-  return `${value}${suffix}`;
+  return `${value}`;
 }
 
 function isLearningFailed(status?: string | null): boolean {
@@ -177,19 +179,19 @@ export default function LearningDetailPage() {
             <div className="page-detail-round-box page-flex-1">
               <div className="page-detail-round-name">Accuracy</div>
               <div className="page-detail-round-data page-h-75">
-                <em>{formatMetric(learning?.accuracy, '%')}</em>
+                <em>{formatMetric(learning?.accuracy)}</em>
               </div>
             </div>
             <div className="page-detail-round-box page-flex-1">
               <div className="page-detail-round-name">Precision</div>
               <div className="page-detail-round-data page-h-75">
-                <em>{formatMetric(learning?.precision, '%')}</em>
+                <em>{formatMetric(learning?.precision)}</em>
               </div>
             </div>
             <div className="page-detail-round-box page-flex-1">
               <div className="page-detail-round-name">Recall</div>
               <div className="page-detail-round-data page-h-75">
-                <em>{formatMetric(learning?.recall, '%')}</em>
+                <em>{formatMetric(learning?.recall)}</em>
               </div>
             </div>
             <div className="page-detail-round-box page-flex-1">
