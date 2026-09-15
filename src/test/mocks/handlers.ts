@@ -22,6 +22,7 @@ export {
   mockCustomModels,
   mockImprovementTaskTypes,
   mockModelCatalogs,
+  mockModelFiles,
   mockModelFormats,
   mockModelProviders,
   mockModels,

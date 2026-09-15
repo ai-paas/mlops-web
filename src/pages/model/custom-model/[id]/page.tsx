@@ -1,28 +1,19 @@
-import { useState } from 'react';
-import type { ColDef, Sorting } from '@innogrid/ui';
-import { BreadCrumb, Table, useTableSelection, useTablePagination, Tabs } from '@innogrid/ui';
+import { BreadCrumb, Tabs } from '@innogrid/ui';
 
 import {
   IconArrowModelTree,
   IconLogoKaggle,
   IconLogoHuggingface,
-  IconDownload,
 } from '../../../../assets/img/icon';
 import styles from '../../model.module.scss';
 import { useNavigate, useParams } from 'react-router';
 import { useGetModel } from '@/hooks/service/models';
 import { formatDateTime } from '@/util/date';
 import { DeleteCustomModelButton } from '@/components/features/model/delete-custom-model-button';
+import { ModelFileTable } from '@/components/features/model/model-file-table';
 import { ModelImprovementButton } from '@/components/features/model/model-improvement-button';
 import type { Model, ModelReadChild, ModelVisibility } from '@/types/model';
 import { DetailValue } from '@/components/ui/detail-value';
-
-interface ModelFile {
-  name: string;
-  fileSize: string;
-  date: string;
-  download: string;
-}
 
 type ModelTreeRelation = 'ancestor' | 'current' | 'descendant';
 
@@ -91,57 +82,12 @@ function getModelTreeRoute(node: ModelTreeNode): string {
   return isCatalog ? `/model/model-catalog/${node.id}` : `/model/custom-model/${node.id}`;
 }
 
-const columns: ColDef<ModelFile>[] = [
-  {
-    id: 'name',
-    header: '이름',
-    accessorFn: (row: ModelFile) => row.name,
-    size: 500,
-  },
-  {
-    id: 'fileSize',
-    header: '파일 크기',
-    accessorFn: (row: ModelFile) => row.fileSize,
-    size: 500,
-  },
-  {
-    id: 'date',
-    header: '업데이트 일시',
-    accessorFn: (row: ModelFile) => row.date,
-    size: 500,
-  },
-  {
-    id: 'download',
-    header: '다운로드',
-    accessorFn: (row: ModelFile) => row.download,
-    size: 123,
-    cell: () => (
-      <button type="button" className={styles.btnDownload}>
-        <IconDownload />
-      </button>
-    ),
-    enableSorting: false,
-  },
-];
-
 export default function CustomModelDetailPage() {
   const { id } = useParams();
   const { model, isPending } = useGetModel(Number(id));
   const navigate = useNavigate();
 
   const treeNodes = model ? buildModelTree(model) : [];
-
-  const { setRowSelection, rowSelection } = useTableSelection();
-  const { pagination, setPagination } = useTablePagination();
-  const [sorting, setSorting] = useState<Sorting>([{ id: 'name', desc: false }]);
-  const [rowData] = useState([
-    {
-      name: 'Model-0001-of-0004.safetensors',
-      fileSize: '4.43 GB',
-      date: '2025-12-31 10:12',
-      download: '',
-    },
-  ]);
 
   return (
     <main>
@@ -326,25 +272,7 @@ export default function CustomModelDetailPage() {
         <div className="page-tabsBox">
           <Tabs
             labels={['파일']}
-            components={[
-              <div className="tabs-Content" key="files">
-                <div>
-                  <Table
-                    useClientPagination
-                    useMultiSelect
-                    columns={columns}
-                    data={rowData}
-                    totalCount={rowData.length}
-                    pagination={pagination}
-                    setPagination={setPagination}
-                    rowSelection={rowSelection}
-                    setRowSelection={setRowSelection}
-                    setSorting={setSorting}
-                    sorting={sorting}
-                  />
-                </div>
-              </div>,
-            ]}
+            components={[<ModelFileTable modelId={model?.id} key="files" />]}
           />
         </div>
       </div>

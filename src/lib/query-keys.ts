@@ -19,6 +19,7 @@ import type {
   GetHubModelsParams,
   GetImprovementTaskTypesParams,
   GetModelCatalogsParams,
+  GetModelFilesParams,
   GetModelFormatsParams,
   GetModelProvidersParams,
   GetModelsParams,
@@ -127,6 +128,9 @@ export const queryKeys = {
     all: ['models'] as const,
     list: (params: GetModelsParams = {}) => [...queryKeys.models.all, params] as const,
     detail: (modelId: number) => [...queryKeys.models.all, 'detail', modelId] as const,
+    // detail 하위 계층 — 모델 삭제 시 detail 제거·무효화가 파일 캐시까지 함께 덮는다
+    files: (modelId: number, params: GetModelFilesParams = {}) =>
+      [...queryKeys.models.detail(modelId), 'files', params] as const,
   },
   customModels: {
     all: ['custom-models'] as const,
